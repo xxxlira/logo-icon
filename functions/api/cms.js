@@ -42,6 +42,14 @@ const MAX_BODY = 20 * 1024 * 1024;
    因此一次调用最多安全写 30 张图片。图片更多时拆成多次调用，中间批次用
    [CI Skip] 跳过 Pages 构建，最后一批写清单并只触发一次构建。 */
 const BATCH_SIZE = 30;
+/* 一次「发布到线上」生成唯一 pubId，随每个批次一起提交。
+   跨境链路下响应可能在回程丢失，前端重试同一个 pubId：
+   - 清单已是本次发布的结果 → 直接返回成功，绝不重复写入、不重复触发构建；
+   - 只有图片批已提交 → 重传同名文件是幂等的（内容相同的 blob）。 */
+function safePubId(v) {
+  const t = String(v == null ? '' : v);
+  return /^[A-Za-z0-9_-]{6,80}$/.test(t) ? t : '';
+}
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const GH = 'https://api.github.com/repos/' + REPO;
 const SNAP_RE = /(<script id="site-db"[^>]*>)[\s\S]*?(<\/script>)/;
@@ -227,8 +235,15 @@ function publicPayload(db) {
 
 /* 把 DB 里的 dataURL 图片拆成独立文件，并把字段改成站内相对路径 */
 function extractImages(p) {
-  const files = [], seen = new Set();
-  for (const a of p.apps) {
+  const files = [], seen = new Set(), mapped = [];
+  /* ref 用数组下标定位，前端拿到后把本机 DB 里对应的 dataURL 换成站内相对路径，
+     下一批请求就只带「还没上传」的图片，不再反复重传整馆（第 38 轮）。 */
+  const push = (path, b64, ref) => {
+    if (!seen.has(path)) { files.push({ path, base64: b64, ref }); seen.add(path); }
+    else mapped.push(ref);
+  };
+  for (let ai = 0; ai < p.apps.length; ai++) {
+    const a = p.apps[ai];
     /* 本应用内 dataURL 内容 → 已拆出的文件路径，用于复用同一张图 */
     const own = new Map();
     const remember = (b64, path) => { if (!own.has(b64)) own.set(b64, path); };
@@ -236,7 +251,9 @@ function extractImages(p) {
     if (!slug || !/^[a-z0-9][a-z0-9-]{0,80}$/.test(slug)) {
       throw new Error('应用 slug 不合法：' + String(slug).slice(0, 60));
     }
-    for (const ic of (a.icons || [])) {
+    const icons = a.icons || [];
+    for (let ii = 0; ii < icons.length; ii++) {
+      const ic = icons[ii];
       for (const field of ['url', 'hdUrl']) {
         const v = ic[field];
         if (typeof v !== 'string' || !v.startsWith('data:')) continue;
@@ -247,25 +264,26 @@ function extractImages(p) {
         const name = slug + suffix + '.' + d.ext;
         if (!SAFE_NAME.test(name)) throw new Error('图片文件名不合法：' + name);
         const path = dir + '/' + name;
-        if (!seen.has(path)) { files.push({ path, base64: d.b64 }); seen.add(path); }
+        push(path, d.b64, { ai, ii, field, path });
         remember(d.b64, path);
         ic[field] = path;
       }
     }
     /* 详情页「相关图片」：同样拆成独立文件，避免 dataURL 撑爆 manifest.json */
     const rels = a.app && Array.isArray(a.app.relatedImages) ? a.app.relatedImages : [];
-    for (const ri of rels) {
-      const v = ri && ri.url;
+    for (let ri = 0; ri < rels.length; ri++) {
+      const r = rels[ri];
+      const v = r && r.url;
       if (typeof v !== 'string' || !v.startsWith('data:')) continue;
       const d = parseDataURL(v);
       if (!d) continue;
-      const rid = String(ri.id || '').replace(/[^a-z0-9-]/gi, '').slice(-24) || 'img';
+      const rid = String(r.id || '').replace(/[^a-z0-9-]/gi, '').slice(-24) || 'img';
       const name = slug + '-' + rid + '.' + d.ext;
       if (!SAFE_NAME.test(name)) throw new Error('相关图片文件名不合法：' + name);
       const path = 'related/' + name;
-      if (!seen.has(path)) { files.push({ path, base64: d.b64 }); seen.add(path); }
+      push(path, d.b64, { ai, ri, field: 'related', path });
       remember(d.b64, path);
-      ri.url = path;
+      r.url = path;
     }
     /* defaultIconUrl 常是图标 url 的同一张 dataURL（旧版本 / App Store 导入），
        过去会整段留在清单与内嵌快照里（60+ 应用约 300KB 冗余），并且每次保存都重传。
@@ -279,14 +297,16 @@ function extractImages(p) {
           const name = slug + '-default.' + dd.ext;
           if (!SAFE_NAME.test(name)) throw new Error('默认图标文件名不合法：' + name);
           path = 'thumbs/' + name;
-          if (!seen.has(path)) { files.push({ path, base64: dd.b64 }); seen.add(path); }
+          push(path, dd.b64, { ai, field: 'defaultIconUrl', path });
           remember(dd.b64, path);
+        } else {
+          mapped.push({ ai, field: 'defaultIconUrl', path });
         }
         a.defaultIconUrl = path;
       }
     }
   }
-  return files;
+  return { files, mapped };
 }
 
 function buildManifest(p) {
@@ -304,6 +324,7 @@ function buildManifest(p) {
      覆盖内嵌快照，若此处漏掉，管理员发布的开关会在刷新后被 publicSecurity(undefined)
      重置为默认值 —— 这正是「后台改了不生效」的根因。 */
   m.security = publicSecurity(p.security);
+  if (p.publishId) m.publishId = p.publishId;
   return m;
 }
 
@@ -314,6 +335,7 @@ async function buildIndexHTML(p, env) {
     generatedAt: p.generatedAt, apps: p.apps, designers: p.designers,
     categories: p.categories, styles: p.styles, types: p.types, about: p.about,
     settings: p.settings, security: p.security, version: 5,
+    ...(p.publishId ? { publishId: p.publishId } : {}),
   }).replace(/</g, '\\u003c');
   return html.replace(SNAP_RE, (all, open, close) => open + snapshot + close);
 }
@@ -395,6 +417,16 @@ async function handleGet(ctx) {
     const { manifest, cached } = await cachedManifest(env, url);
     return json(manifest, 200, { 'X-CMS-Cache': cached ? 'hit' : 'miss' });
   }
+  /* 断连核对：直接读仓库清单（不走 15s 缓存），只回几十字节 */
+  if (action === 'verify') {
+    const want = safePubId(url.searchParams.get('pubId'));
+    if (!want) return json({ published: false, reason: '缺少 pubId' });
+    try {
+      const m = JSON.parse(await readRepoFile('manifest.json', env));
+      return json({ published: m.publishId === want, generatedAt: m.generatedAt || '',
+        apps: Array.isArray(m.apps) ? m.apps.length : 0 });
+    } catch (e) { return json({ published: false, reason: '线上清单暂不可读' }); }
+  }
   return json({ error: '未知操作' }, 400);
 }
 
@@ -424,6 +456,11 @@ async function handlePost(ctx) {
 
   if (body.action === 'save') {
     const p = publicPayload(body.db || {});
+    const pubId = safePubId(body.pubId);
+    p.publishId = pubId;
+    /* 新版前端每批只带「还没上传」的 dataURL，offset 表示已累计上传数量。
+       老版前端不带 incremental，仍按原来的 offset 切片逻辑工作，完全兼容。 */
+    const incremental = body.incremental === true;
     /* 防止另一台设备 / 过期草稿把整馆数据整包覆盖：
        一次发布若把应用数砍掉一半以上且减少 >= 20 个，直接拒绝。
        正常的分批删除不受影响；确需整批清理可分批进行。 */
@@ -433,6 +470,12 @@ async function handlePost(ctx) {
       oldCount = Array.isArray(oldM.apps) ? oldM.apps.length : 0;
     } catch (e) { /* 读不到旧清单时不做猜测，放行 */ }
     const newCount = Array.isArray(p.apps) ? p.apps.length : 0;
+    /* 断连后重试：线上清单已是本次发布的结果，直接返回成功。
+       必须放在「旧草稿覆盖」护栏之前，否则重试会被误判并拒绝。 */
+    if (pubId && oldM && oldM.publishId === pubId) {
+      return json({ ok: true, already: true, sha: '', generatedAt: oldM.generatedAt,
+        skippedBuild: true, total: 0, chunks: 0, refs: [], mapped: [] });
+    }
     if (oldCount >= 20 && newCount < oldCount * 0.5 && oldCount - newCount >= 20) {
       return json({
         error: '已拦截一次疑似旧草稿覆盖：线上现有 ' + oldCount + ' 个应用，'
@@ -442,19 +485,25 @@ async function handlePost(ctx) {
       }, 409);
     }
     /* extractImages 同时把 p 里的 dataURL 改写成站内相对路径 */
-    const images = extractImages(p);
-    const total = images.length;
+    const { files: images, mapped } = extractImages(p);
+    const remaining = images.length;
     const offset = Math.max(0, Number(body.offset) || 0);
+    /* 进度条用的总数：增量模式下要加上前面批次已上传的数量 */
+    const totalForUI = incremental ? Math.max(remaining + offset, Number(body.total) || 0) : remaining;
 
     /* 图片超出单次调用预算时，只写这一批图片；前端会带着 next 再发一次请求。
        每个批次是一次独立的 Worker 调用，因此子请求数始终 <= 约 36 次。 */
-    if (total > BATCH_SIZE && offset < total) {
-      const slice = images.slice(offset, offset + BATCH_SIZE);
-      const next = Math.min(offset + BATCH_SIZE, total);
+    const needChunk = remaining > BATCH_SIZE && (incremental || offset < remaining);
+    if (needChunk) {
+      const slice = incremental ? images.slice(0, BATCH_SIZE) : images.slice(offset, offset + BATCH_SIZE);
+      const next = incremental ? offset + slice.length : Math.min(offset + BATCH_SIZE, remaining);
       const sha = await atomicCommit(slice, env,
-        '[CI Skip] 站内编辑：上传图片 ' + next + '/' + total);
-      return json({ ok: true, chunk: true, total, written: slice.length, next,
-        sha, skippedBuild: true, generatedAt: p.generatedAt });
+        '[CI Skip] 站内编辑：上传图片 ' + next + '/' + totalForUI);
+      const paths = new Set(slice.map(f => f.path));
+      return json({ ok: true, chunk: true, total: totalForUI, written: slice.length, next,
+        sha, skippedBuild: true, generatedAt: p.generatedAt,
+        refs: slice.map(f => f.ref).filter(Boolean),
+        mapped: mapped.filter(r => paths.has(r.path)) });
     }
 
     /* 最后一批（或图片不多时的一次性提交）：写清单、页面，并回收孤儿图片。
@@ -470,19 +519,23 @@ async function handlePost(ctx) {
     /* 图片未超过一批时，图片文件必须在本批一起写入（否则清单里已是相对路径、
        仓库里却没有对应文件，图标会 404）；超过一批时图片由前面的批次写完，
        这里只负责清单、页面与孤儿删除。 */
-    const items = (total > BATCH_SIZE ? [] : images).concat(removals).concat([
+    const items = (remaining > BATCH_SIZE ? [] : images).concat(removals).concat([
       { path: 'manifest.json', base64: utf8ToB64(JSON.stringify(buildManifest(p))) },
       { path: 'index.html', base64: utf8ToB64(await buildIndexHTML(p, env)) },
     ]);
     /* 纯文字改动跳过构建；含新图片或删除应用时正常构建一次（前面各批都 [CI Skip]） */
-    const skippedBuild = total === 0 && removals.length === 0;
+    /* 增量模式下前面批次都用 [CI Skip] 提交，最后一批必须触发一次构建，
+       否则新图片文件不会出现在 Cloudflare CDN 上（会 404）。 */
+    const skippedBuild = remaining === 0 && removals.length === 0 && offset === 0;
     const message = (skippedBuild ? '[CI Skip] ' : '')
       + '站内编辑：' + p.apps.length + ' 个应用 · ' + new Date().toISOString();
     const sha = await atomicCommit(items, env, message);
     const c = cacheObj();
     if (c) { try { await c.delete(cacheKey(url)); } catch (e) { /* ignore */ } }
     return json({ ok: true, sha, files: items.length, generatedAt: p.generatedAt,
-      skippedBuild, total, chunks: total > BATCH_SIZE ? Math.ceil(total / BATCH_SIZE) : 0 });
+      skippedBuild, total: totalForUI,
+      refs: images.map(f => f.ref).filter(Boolean), mapped,
+      chunks: remaining > BATCH_SIZE ? Math.ceil(remaining / BATCH_SIZE) : 0 });
   }
   return json({ error: '未知操作' }, 400);
 }
