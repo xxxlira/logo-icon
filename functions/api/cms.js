@@ -36,6 +36,11 @@ const REPO = 'xxxlira/logo-icon-museum';
 const BRANCH = 'main';
 const COOKIE = 'im_cms';
 const MAX_BODY = 20 * 1024 * 1024;
+/* Cloudflare Workers 免费版每次调用最多 50 个子请求。每写一个图片 blob 就要
+   一次 GitHub API，加上读取清单/页面、ref、commit、tree、patch 共约 8 次固定开销，
+   因此一次调用最多安全写 30 张图片。图片更多时拆成多次调用，中间批次用
+   [CI Skip] 跳过 Pages 构建，最后一批写清单并只触发一次构建。 */
+const BATCH_SIZE = 30;
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const GH = 'https://api.github.com/repos/' + REPO;
 const SNAP_RE = /(<script id="site-db"[^>]*>)[\s\S]*?(<\/script>)/;
@@ -382,9 +387,9 @@ async function handlePost(ctx) {
     /* 防止另一台设备 / 过期草稿把整馆数据整包覆盖：
        一次发布若把应用数砍掉一半以上且减少 >= 20 个，直接拒绝。
        正常的分批删除不受影响；确需整批清理可分批进行。 */
-    let oldCount = 0;
+    let oldM = null, oldCount = 0;
     try {
-      const oldM = JSON.parse(await readRepoFile('manifest.json', env));
+      oldM = JSON.parse(await readRepoFile('manifest.json', env));
       oldCount = Array.isArray(oldM.apps) ? oldM.apps.length : 0;
     } catch (e) { /* 读不到旧清单时不做猜测，放行 */ }
     const newCount = Array.isArray(p.apps) ? p.apps.length : 0;
@@ -396,23 +401,45 @@ async function handlePost(ctx) {
              + '确实要删除请分批操作。'
       }, 409);
     }
+    /* extractImages 同时把 p 里的 dataURL 改写成站内相对路径 */
     const images = extractImages(p);
-    const orphans = await orphanedImagePaths(p, env);
+    const total = images.length;
+    const offset = Math.max(0, Number(body.offset) || 0);
+
+    /* 图片超出单次调用预算时，只写这一批图片；前端会带着 next 再发一次请求。
+       每个批次是一次独立的 Worker 调用，因此子请求数始终 <= 约 36 次。 */
+    if (total > BATCH_SIZE && offset < total) {
+      const slice = images.slice(offset, offset + BATCH_SIZE);
+      const next = Math.min(offset + BATCH_SIZE, total);
+      const sha = await atomicCommit(slice, env,
+        '[CI Skip] 站内编辑：上传图片 ' + next + '/' + total);
+      return json({ ok: true, chunk: true, total, written: slice.length, next,
+        sha, skippedBuild: true, generatedAt: p.generatedAt });
+    }
+
+    /* 最后一批（或图片不多时的一次性提交）：写清单、页面，并回收孤儿图片。
+       旧清单已在护栏阶段读过，这里直接复用，省一次 GitHub 请求。 */
+    let orphans = [];
+    if (oldM) {
+      try {
+        const after = referencedImagePaths(p);
+        orphans = [...referencedImagePaths(oldM)].filter(x => !after.has(x)).slice(0, 500);
+      } catch (e) { /* 差集失败时不做删除，避免误删 */ }
+    }
     const removals = orphans.map(path => ({ path, remove: true }));
-    const items = images.concat(removals).concat([
+    const items = removals.concat([
       { path: 'manifest.json', base64: utf8ToB64(JSON.stringify(buildManifest(p))) },
       { path: 'index.html', base64: utf8ToB64(await buildIndexHTML(p, env)) },
     ]);
-    /* 纯文字改动不需要重建静态资源：用 Cloudflare 官方的 [CI Skip] 提交信息前缀
-       跳过 Pages 构建；内容本身通过 /api/cms?action=manifest 即时生效。
-       含新图片或删了应用（要回收 CDN 上的旧图）时才正常构建。 */
-    const skippedBuild = images.length === 0 && removals.length === 0;
+    /* 纯文字改动跳过构建；含新图片或删除应用时正常构建一次（前面各批都 [CI Skip]） */
+    const skippedBuild = total === 0 && removals.length === 0;
     const message = (skippedBuild ? '[CI Skip] ' : '')
       + '站内编辑：' + p.apps.length + ' 个应用 · ' + new Date().toISOString();
     const sha = await atomicCommit(items, env, message);
     const c = cacheObj();
     if (c) { try { await c.delete(cacheKey(url)); } catch (e) { /* ignore */ } }
-    return json({ ok: true, sha, files: items.length, generatedAt: p.generatedAt, skippedBuild });
+    return json({ ok: true, sha, files: items.length, generatedAt: p.generatedAt,
+      skippedBuild, total, chunks: total > BATCH_SIZE ? Math.ceil(total / BATCH_SIZE) : 0 });
   }
   return json({ error: '未知操作' }, 400);
 }

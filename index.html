@@ -864,7 +864,7 @@ const LOCAL_QUOTA=5*1024*1024; /* 实测 Chrome/Safari 本地存储上限约 5 M
  * 登录后后台改动会同步写回 GitHub，访客刷新即可看到，无需等待 Pages 重建。
  * 没有后端时 CLOUD.available 恒为 false，全部行为与原来的纯静态只读站点一致。 */
 const CLOUD={available:false,authed:false,publishing:false,error:'',remoteNewer:false,
-  state:'idle',startedAt:0,result:null};
+  state:'idle',startedAt:0,result:null,progress:''};
 let PUBLISH_TIMER=null;
 function cmsURL(action){return 'api/cms?action='+action}
 async function cmsGet(action){
@@ -917,7 +917,7 @@ function publishStatusHTML(){
   if(st==='publishing'){
     const sec=Math.max(0,Math.round((Date.now()-(CLOUD.startedAt||Date.now()))/1000));
     return `<div class="publish-status working"><span class="ps-spin" aria-hidden="true"></span>
-      <span><b>正在发布到线上…</b> 已等待 ${sec} 秒<br><span class="tiny">正在把改动写回 GitHub，请不要关闭页面；完成后这里会显示结果。</span></span></div>`;
+      <span><b>正在发布到线上…</b> 已等待 ${sec} 秒<br><span class="tiny">${CLOUD.progress?h(CLOUD.progress)+' · ':''}正在把改动写回 GitHub，请不要关闭页面；完成后这里会显示结果。</span></span></div>`;
   }
   if(st==='error'){
     return `<div class="publish-status failed"><span><b>发布失败</b><br>
@@ -928,7 +928,7 @@ function publishStatusHTML(){
   const r=CLOUD.result;
   if(!r)return '';
   return `<div class="publish-status done"><span><b>已发布到线上</b> · ${h(r.time)}<br>
-    <span class="tiny">提交 <code>${h(String(r.sha||'').slice(0,8))}</code> · ${r.skippedBuild?'纯文字改动，访客刷新即可看到':'含新图片，约 1–2 分钟后全站生效'}</span></span>
+    <span class="tiny">提交 <code>${h(String(r.sha||'').slice(0,8))}</code> · ${r.chunks>1?'分 '+r.chunks+' 批上传 '+r.total+' 张图片 · ':''}${r.skippedBuild?'纯文字改动，访客刷新即可看到':'含新图片，约 1–2 分钟后全站生效'}</span></span>
     <span style="flex:1"></span><a class="btn sm" target="_blank" rel="noopener noreferrer" href="https://github.com/xxxlira/logo-icon-museum/commit/${h(r.sha)}">查看提交 ↗</a></div>`;
 }
 function updatePublishUI(){const slot=$('#publish-slot');if(slot)slot.innerHTML=publishStatusHTML()}
@@ -952,7 +952,8 @@ function markDraft(){
 function clearDraft(){try{localStorage.removeItem(DRAFT_KEY)}catch(e){}CLOUD.remoteNewer=false;updateDraftUI()}
 async function publishNow(){
   if(!CLOUD.available||CLOUD.publishing)return;
-  CLOUD.publishing=true;CLOUD.state='publishing';CLOUD.startedAt=Date.now();CLOUD.error='';
+  CLOUD.publishing=true;CLOUD.state='publishing';CLOUD.startedAt=Date.now();
+  CLOUD.error='';CLOUD.progress='';
   if(PUBLISH_TIMER)clearInterval(PUBLISH_TIMER);
   PUBLISH_TIMER=setInterval(()=>{
     if(CLOUD.state==='publishing')updatePublishUI();
@@ -966,15 +967,28 @@ async function publishNow(){
       CLOUD.authed=false;
       throw new Error('登录已失效，请重新登录。草稿仍保留在本机，刷新页面重新输入密码即可继续发布。');
     }
-    const r=await fetch('api/cms',{method:'POST',credentials:'same-origin',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'save',db:publicDB()})});
-    const j=await r.json();
-    if(!r.ok||!j.ok)throw new Error(j.error||('HTTP '+r.status));
+    /* 图片多时后端会自动分批：每次请求是独立的 Worker 调用，
+       避免 Cloudflare 免费版「单次调用 50 个子请求」的限制。 */
+    let offset=0,chunks=0,total=0,j=null;
+    for(let guard=0;guard<200;guard++){
+      const r=await fetch('api/cms',{method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'save',db:publicDB(),offset})});
+      j=await r.json();
+      if(!r.ok||!j.ok)throw new Error(j.error||('HTTP '+r.status));
+      if(j.chunk){
+        chunks++;total=j.total;offset=j.next;
+        CLOUD.progress='正在上传图片 '+j.next+' / '+j.total+'（第 '+(chunks+1)+' 批）';
+        updatePublishUI();
+        continue;
+      }
+      break;
+    }
+    if(!j||j.chunk)throw new Error('发布批次异常中断，请重试');
     DB.generatedAt=j.generatedAt;CLOUD.error='';
     CLOUD.state='done';
     CLOUD.result={time:new Date().toLocaleTimeString('zh-CN',{hour12:false}),
-      sha:j.sha||'',skippedBuild:!!j.skippedBuild};
+      sha:j.sha||'',skippedBuild:!!j.skippedBuild,chunks,total};
     clearDraft();
     toast(j.skippedBuild?'已发布，访客刷新即可看到（本次未触发构建）':'已发布，新图约 1–2 分钟后显示',3600);
     /* 把本地的 dataURL 图片换成后端拆分出的站内相对路径 */
