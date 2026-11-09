@@ -218,6 +218,9 @@ function publicPayload(db) {
 function extractImages(p) {
   const files = [], seen = new Set();
   for (const a of p.apps) {
+    /* 本应用内 dataURL 内容 → 已拆出的文件路径，用于复用同一张图 */
+    const own = new Map();
+    const remember = (b64, path) => { if (!own.has(b64)) own.set(b64, path); };
     const slug = a && a.app && a.app.slug;
     if (!slug || !/^[a-z0-9][a-z0-9-]{0,80}$/.test(slug)) {
       throw new Error('应用 slug 不合法：' + String(slug).slice(0, 60));
@@ -234,6 +237,7 @@ function extractImages(p) {
         if (!SAFE_NAME.test(name)) throw new Error('图片文件名不合法：' + name);
         const path = dir + '/' + name;
         if (!seen.has(path)) { files.push({ path, base64: d.b64 }); seen.add(path); }
+        remember(d.b64, path);
         ic[field] = path;
       }
     }
@@ -249,7 +253,26 @@ function extractImages(p) {
       if (!SAFE_NAME.test(name)) throw new Error('相关图片文件名不合法：' + name);
       const path = 'related/' + name;
       if (!seen.has(path)) { files.push({ path, base64: d.b64 }); seen.add(path); }
+      remember(d.b64, path);
       ri.url = path;
+    }
+    /* defaultIconUrl 常是图标 url 的同一张 dataURL（旧版本 / App Store 导入），
+       过去会整段留在清单与内嵌快照里（60+ 应用约 300KB 冗余），并且每次保存都重传。
+       内容相同的直接复用已拆出的文件；内容不同的另存一份，绝不丢图。 */
+    const dv = a && a.defaultIconUrl;
+    if (typeof dv === 'string' && dv.startsWith('data:image/')) {
+      const dd = parseDataURL(dv);
+      if (dd) {
+        let path = own.get(dd.b64);
+        if (!path) {
+          const name = slug + '-default.' + dd.ext;
+          if (!SAFE_NAME.test(name)) throw new Error('默认图标文件名不合法：' + name);
+          path = 'thumbs/' + name;
+          if (!seen.has(path)) { files.push({ path, base64: dd.b64 }); seen.add(path); }
+          remember(dd.b64, path);
+        }
+        a.defaultIconUrl = path;
+      }
     }
   }
   return files;
@@ -291,6 +314,8 @@ function referencedImagePaths(m) {
         if (typeof v === 'string' && SITE_IMG.test(v)) set.add(v.replace(/^\.\//, ''));
       }
     }
+    const du = a && a.defaultIconUrl;
+    if (typeof du === 'string' && SITE_IMG.test(du)) set.add(du.replace(/^\.\//, ''));
     for (const ri of ((a.app && a.app.relatedImages) || [])) {
       const v = ri && ri.url;
       if (typeof v === 'string' && SITE_IMG.test(v)) set.add(v.replace(/^\.\//, ''));
@@ -427,7 +452,10 @@ async function handlePost(ctx) {
       } catch (e) { /* 差集失败时不做删除，避免误删 */ }
     }
     const removals = orphans.map(path => ({ path, remove: true }));
-    const items = removals.concat([
+    /* 图片未超过一批时，图片文件必须在本批一起写入（否则清单里已是相对路径、
+       仓库里却没有对应文件，图标会 404）；超过一批时图片由前面的批次写完，
+       这里只负责清单、页面与孤儿删除。 */
+    const items = (total > BATCH_SIZE ? [] : images).concat(removals).concat([
       { path: 'manifest.json', base64: utf8ToB64(JSON.stringify(buildManifest(p))) },
       { path: 'index.html', base64: utf8ToB64(await buildIndexHTML(p, env)) },
     ]);
