@@ -458,6 +458,16 @@ pre,.api-list,.log-line{overflow-wrap:anywhere}
 }
 .draft-banner{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 20px;padding:12px 16px;border:1px solid #f0cf85;border-radius:10px;background:#fff9e8;color:#6b4a05;font-size:13px;line-height:1.65}
 .draft-banner .btn{flex-shrink:0}
+.publish-status{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px;padding:12px 16px;border:1px solid;border-radius:10px;font-size:13px;line-height:1.65}
+.publish-status .tiny{font-size:12px;opacity:.86}
+.publish-status .btn{flex-shrink:0}
+.publish-status code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;font-size:12px}
+.publish-status.working{border-color:#a9c7ea;background:#eef5fd;color:#14508c}
+.publish-status.done{border-color:#a9d6a0;background:#eef8ec;color:#256b1e}
+.publish-status.failed{border-color:#edb6b6;background:#fdf0f0;color:#8b2626}
+.ps-spin{width:15px;height:15px;flex-shrink:0;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:ps-rotate .8s linear infinite}
+@keyframes ps-rotate{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.ps-spin{animation:none}}
 </style>
 </head>
 <body class="lang-zh">
@@ -853,7 +863,9 @@ const LOCAL_QUOTA=5*1024*1024; /* 实测 Chrome/Safari 本地存储上限约 5 M
  * 站点部署了 Pages Functions（/api/cms）并配置好环境变量时自动启用：
  * 登录后后台改动会同步写回 GitHub，访客刷新即可看到，无需等待 Pages 重建。
  * 没有后端时 CLOUD.available 恒为 false，全部行为与原来的纯静态只读站点一致。 */
-const CLOUD={available:false,authed:false,publishing:false,error:'',remoteNewer:false};
+const CLOUD={available:false,authed:false,publishing:false,error:'',remoteNewer:false,
+  state:'idle',startedAt:0,result:null};
+let PUBLISH_TIMER=null;
 function cmsURL(action){return 'api/cms?action='+action}
 async function cmsGet(action){
   const r=await fetch(cmsURL(action),{cache:'no-store',credentials:'same-origin'});
@@ -888,16 +900,38 @@ function draftSideHTML(d){
     ? `有 <b>${d.edits}</b> 处未发布更改<br>访客仍看到上次发布版本`
     : '已与线上同步<br>改动先暂存本机'}${warn}
     <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
-      <button class="btn sm ${d?'primary':''}" data-act="cmspublish" ${d?'':'disabled'}>发布到线上</button>
-      ${d?'<button class="btn sm" data-act="cmsdiscard">放弃更改</button>':''}
+      <button class="btn sm ${d?'primary':''}" data-act="cmspublish" ${d&&!CLOUD.publishing?'':'disabled'}>${CLOUD.publishing?'发布中…':'发布到线上'}</button>
+      ${d?'<button class="btn sm" data-act="cmsdiscard" '+(CLOUD.publishing?'disabled':'')+'>放弃更改</button>':''}
     </div>`;
 }
 function draftBannerHTML(d){
   if(!d)return '';
   return `<div id="draft-banner" class="draft-banner"><span>● 有 <b>${d.edits}</b> 处未发布更改 · 仅本机可见，访客仍看到上次发布的版本${CLOUD.remoteNewer?'；线上已有新版本，发布将覆盖':''}</span>
-    <span style="flex:1"></span><button class="btn sm primary" data-act="cmspublish">发布到线上</button>
-    <button class="btn sm" data-act="cmsdiscard">放弃更改</button></div>`;
+    <span style="flex:1"></span><button class="btn sm primary" data-act="cmspublish" ${CLOUD.publishing?'disabled':''}>${CLOUD.publishing?'发布中…':'发布到线上'}</button>
+    <button class="btn sm" data-act="cmsdiscard" ${CLOUD.publishing?'disabled':''}>放弃更改</button></div>`;
 }
+/* ---------- 发布状态条：进行中 / 成功 / 失败全程可见 ---------- */
+function publishStatusHTML(){
+  const h=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const st=CLOUD.state;
+  if(st==='publishing'){
+    const sec=Math.max(0,Math.round((Date.now()-(CLOUD.startedAt||Date.now()))/1000));
+    return `<div class="publish-status working"><span class="ps-spin" aria-hidden="true"></span>
+      <span><b>正在发布到线上…</b> 已等待 ${sec} 秒<br><span class="tiny">正在把改动写回 GitHub，请不要关闭页面；完成后这里会显示结果。</span></span></div>`;
+  }
+  if(st==='error'){
+    return `<div class="publish-status failed"><span><b>发布失败</b><br>
+      <span class="tiny">${h(CLOUD.error||'未知错误')}</span><br>
+      <span class="tiny">草稿仍保留在本机，没有丢失。可点「重试发布」，或把上面这段提示发给管理员排查。</span></span>
+      <span style="flex:1"></span><button class="btn sm primary" data-act="cmspublish">重试发布</button></div>`;
+  }
+  const r=CLOUD.result;
+  if(!r)return '';
+  return `<div class="publish-status done"><span><b>已发布到线上</b> · ${h(r.time)}<br>
+    <span class="tiny">提交 <code>${h(String(r.sha||'').slice(0,8))}</code> · ${r.skippedBuild?'纯文字改动，访客刷新即可看到':'含新图片，约 1–2 分钟后全站生效'}</span></span>
+    <span style="flex:1"></span><a class="btn sm" target="_blank" rel="noopener noreferrer" href="https://github.com/xxxlira/logo-icon-museum/commit/${h(r.sha)}">查看提交 ↗</a></div>`;
+}
+function updatePublishUI(){const slot=$('#publish-slot');if(slot)slot.innerHTML=publishStatusHTML()}
 function updateDraftUI(){
   const d=draftInfo();
   const box=$('#draft-box');if(box)box.innerHTML=draftSideHTML(d);
@@ -906,6 +940,7 @@ function updateDraftUI(){
     if(old)old.outerHTML=draftBannerHTML(d);
     else if(main)main.insertAdjacentHTML('afterbegin',draftBannerHTML(d));
   }else if(old)old.remove();
+  updatePublishUI();
 }
 function markDraft(){
   if(!CLOUD.available||!CLOUD.authed)return;
@@ -916,31 +951,50 @@ function markDraft(){
 }
 function clearDraft(){try{localStorage.removeItem(DRAFT_KEY)}catch(e){}CLOUD.remoteNewer=false;updateDraftUI()}
 async function publishNow(){
-  if(!CLOUD.available||!CLOUD.authed||CLOUD.publishing)return;
-  CLOUD.publishing=true;
-  toast('正在发布到线上…',1600);
+  if(!CLOUD.available||CLOUD.publishing)return;
+  CLOUD.publishing=true;CLOUD.state='publishing';CLOUD.startedAt=Date.now();CLOUD.error='';
+  if(PUBLISH_TIMER)clearInterval(PUBLISH_TIMER);
+  PUBLISH_TIMER=setInterval(()=>{
+    if(CLOUD.state==='publishing')updatePublishUI();
+    else{clearInterval(PUBLISH_TIMER);PUBLISH_TIMER=null}
+  },1000);
+  updateDraftUI();
   try{
+    /* 先确认登录态，避免 401 时白等；错误信息会常驻在状态条里 */
+    const s=await cmsGet('session');
+    if(!s||!s.authed){
+      CLOUD.authed=false;
+      throw new Error('登录已失效，请重新登录。草稿仍保留在本机，刷新页面重新输入密码即可继续发布。');
+    }
     const r=await fetch('api/cms',{method:'POST',credentials:'same-origin',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({action:'save',db:publicDB()})});
     const j=await r.json();
     if(!r.ok||!j.ok)throw new Error(j.error||('HTTP '+r.status));
     DB.generatedAt=j.generatedAt;CLOUD.error='';
+    CLOUD.state='done';
+    CLOUD.result={time:new Date().toLocaleTimeString('zh-CN',{hour12:false}),
+      sha:j.sha||'',skippedBuild:!!j.skippedBuild};
     clearDraft();
     toast(j.skippedBuild?'已发布，访客刷新即可看到（本次未触发构建）':'已发布，新图约 1–2 分钟后显示',3600);
     /* 把本地的 dataURL 图片换成后端拆分出的站内相对路径 */
     await loadSiteManifest(true);
   }catch(e){
     CLOUD.error=String(e.message||e);
+    CLOUD.state='error';
     toast('发布失败：'+CLOUD.error+'（草稿仍保留在本机）',6500);
-  }finally{CLOUD.publishing=false}
+  }finally{
+    CLOUD.publishing=false;
+    if(PUBLISH_TIMER){clearInterval(PUBLISH_TIMER);PUBLISH_TIMER=null}
+    updateDraftUI();
+  }
 }
 function viewCloudLogin(){
   const url=location.href.split('#')[0]+'#/admin';
   $('#view').innerHTML=`<div class="card" style="max-width:420px;margin:64px auto;padding:28px">
     <h1 style="margin:0 0 4px;font-size:22px">在线管理</h1>
     <p class="small muted" style="margin:0 0 20px">登录后可在线编辑馆藏；改动先暂存本机，点「发布到线上」后才对所有访客生效。</p>
-    ${CLOUD.error?`<div class="alert" style="margin-bottom:14px">${esc(CLOUD.error)}</div>`:''}
+    ${CLOUD.error?`<div class="alert" style="margin-bottom:14px">上一次发布未完成：${esc(CLOUD.error)}</div>`:''}
     <label class="field"><span>管理员密码</span><input class="input" id="cms-pass" type="password" autocomplete="current-password" placeholder="在 Cloudflare 环境变量中设置"></label>
     <button class="btn primary" style="width:100%;margin-top:16px" data-act="cmslogin">登录</button>
     <p class="tiny muted" id="cms-msg" style="margin-top:12px;text-align:center;min-height:18px"></p>
@@ -1607,7 +1661,7 @@ function adminShell(active,body){
       ${CLOUD.available&&CLOUD.authed
         ? `<div id="draft-box" class="tiny muted" style="padding:2px 10px 8px;line-height:1.7">${draftSideHTML(draftInfo())}</div><a href="#" data-act="cmslogout">⇥ 退出登录</a>`
         : '<a href="#" data-act="logout">⇥ 退出登录</a>'}
-    </aside><main class="admin-main">${draftBannerHTML(draftInfo())}${body}</main></div>`;
+    </aside><main class="admin-main"><div id="publish-slot">${publishStatusHTML()}</div>${draftBannerHTML(draftInfo())}${body}</main></div>`;
 }
 function viewLogin(){
   const hint=adminPass()===DEFAULT_PASS?'<b>museum2026</b>':'<b>已自定义</b>';
