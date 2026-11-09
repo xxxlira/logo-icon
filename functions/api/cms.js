@@ -25,7 +25,8 @@
  *   - 写接口校验 Cookie 签名 + 同源 Origin/Referer，Cookie 为 HttpOnly/Secure/SameSite=Strict
  *   - 请求体上限 20 MB；文件名严格白名单 [a-z0-9-] + .webp/.png/.jpg，防路径穿越
  *   - 只写 manifest.json / index.html / icons/* / thumbs/*，不碰仓库其他文件
- *   - 私有字段 activity / suggestions / security / subscribers 一律不写入公开清单
+ *   - 私有字段 activity / suggestions / subscribers 一律不写入公开清单
+ *   - security 只有 7 个布尔开关会被白名单过滤后公开，管理员本机状态不外泄
  *   - 不做自动删除旧图片（避免误删）；跑本地 update_site.sh 批量重建时会清理
  *   - 建议另外在 Cloudflare Access 里给 /api/* 加一层访问策略，防密码爆破
  *
@@ -202,11 +203,21 @@ function parseDataURL(v) {
   return { ext, b64: m[2].replace(/\s/g, '') };
 }
 
+const SEC_DEFAULT = { contextMenu: true, devKeys: true, dragSelect: true,
+  consoleBanner: true, devtoolsNotice: true, autoNotice: false, iframeNotice: false };
+/* 只公开固定的布尔开关；管理员传什么其它字段都会被丢弃 */
+function publicSecurity(src) {
+  const s = (src && typeof src === 'object') ? src : {}, o = {};
+  for (const k of Object.keys(SEC_DEFAULT)) o[k] = s[k] === undefined ? SEC_DEFAULT[k] : !!s[k];
+  return o;
+}
+
 function publicPayload(db) {
   const p = Object.assign({}, db, {
     version: 5, generatedAt: new Date().toISOString(),
   });
-  ['activity', 'suggestions', 'security', 'subscribers', 'colors'].forEach(k => delete p[k]);
+  ['activity', 'suggestions', 'subscribers', 'colors'].forEach(k => delete p[k]);
+  p.security = publicSecurity(db.security);
   if (!Array.isArray(p.apps)) throw new Error('数据格式不正确：缺少 apps');
   if (!Array.isArray(p.designers)) p.designers = [];
   if (!Array.isArray(p.categories)) p.categories = [];
@@ -289,6 +300,10 @@ function buildManifest(p) {
   if (p.types) m.types = p.types;
   if (p.about) m.about = p.about;
   if (p.settings) m.settings = p.settings;
+  /* 关键：安全策略必须写进 manifest.json。访客端 loadSiteManifest() 会用清单
+     覆盖内嵌快照，若此处漏掉，管理员发布的开关会在刷新后被 publicSecurity(undefined)
+     重置为默认值 —— 这正是「后台改了不生效」的根因。 */
+  m.security = publicSecurity(p.security);
   return m;
 }
 
@@ -298,7 +313,7 @@ async function buildIndexHTML(p, env) {
   const snapshot = JSON.stringify({
     generatedAt: p.generatedAt, apps: p.apps, designers: p.designers,
     categories: p.categories, styles: p.styles, types: p.types, about: p.about,
-    settings: p.settings, version: 5,
+    settings: p.settings, security: p.security, version: 5,
   }).replace(/</g, '\\u003c');
   return html.replace(SNAP_RE, (all, open, close) => open + snapshot + close);
 }
