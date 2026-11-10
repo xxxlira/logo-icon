@@ -474,6 +474,33 @@ pre,.api-list,.log-line{overflow-wrap:anywhere}
 .ps-spin{width:15px;height:15px;flex-shrink:0;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;display:inline-block;animation:ps-rotate .8s linear infinite}
 @keyframes ps-rotate{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.ps-spin{animation:none}}
+
+/* ---- img-fx 风格加载动画：像素马赛克错相闪动 + 斜向扫描带 ----
+   纯 CSS 实现，无 React / three / WebGL / 外部资源；离屏由 FX_IO 暂停。 */
+img.imgfx{
+  color:transparent;  /* 加载中不显示 alt 文本，避免盖住马赛克背景 */
+  background-color:var(--fx-bg,#f1f1f0);
+  background-image:
+    linear-gradient(115deg,transparent 38%,rgba(255,255,255,.72) 50%,transparent 62%),
+    url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2232%22%20height%3D%2232%22%3E%3Cg%20fill%3D%22%23000%22%3E%3Crect%20x%3D%220%22%20y%3D%220%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.10%22/%3E%3Crect%20x%3D%2216%22%20y%3D%220%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.05%22/%3E%3Crect%20x%3D%228%22%20y%3D%228%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.14%22/%3E%3Crect%20x%3D%2224%22%20y%3D%228%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.07%22/%3E%3Crect%20x%3D%220%22%20y%3D%2216%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.06%22/%3E%3Crect%20x%3D%2216%22%20y%3D%2216%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.16%22/%3E%3Crect%20x%3D%228%22%20y%3D%2224%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.09%22/%3E%3Crect%20x%3D%2224%22%20y%3D%2224%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.12%22/%3E%3C/g%3E%3C/svg%3E"),
+    url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2232%22%20height%3D%2232%22%3E%3Cg%20fill%3D%22%23fff%22%3E%3Crect%20x%3D%228%22%20y%3D%220%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.45%22/%3E%3Crect%20x%3D%2224%22%20y%3D%220%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.18%22/%3E%3Crect%20x%3D%220%22%20y%3D%228%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.30%22/%3E%3Crect%20x%3D%2216%22%20y%3D%228%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.55%22/%3E%3Crect%20x%3D%228%22%20y%3D%2216%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.22%22/%3E%3Crect%20x%3D%2224%22%20y%3D%2216%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.40%22/%3E%3Crect%20x%3D%220%22%20y%3D%2224%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.50%22/%3E%3Crect%20x%3D%2216%22%20y%3D%2224%22%20width%3D%228%22%20height%3D%228%22%20opacity%3D%22.26%22/%3E%3C/g%3E%3C/svg%3E");
+  background-size:220% 220%,32px 32px,32px 32px;
+  background-position:-140% 0,0 0,16px 16px;
+  animation:imgfx 2.2s steps(11,end) infinite;
+  animation-play-state:paused;
+}
+img.imgfx.imgfx-on{animation-play-state:running}
+img.imgfx-in{animation:imgfx-reveal .42s ease-out both}
+@keyframes imgfx{
+  0%  {background-position:-140% 0,0 0,16px 16px}
+  20% {background-position:-30% 0,8px -8px,8px 24px}
+  40% {background-position:80% 0,-8px 16px,24px 8px}
+  60% {background-position:170% 0,16px 8px,0 24px}
+  80% {background-position:260% 0,-16px -8px,16px 0}
+  100%{background-position:320% 0,0 0,16px 16px}
+}
+@keyframes imgfx-reveal{from{opacity:.3;filter:blur(4px)}to{opacity:1;filter:blur(0)}}
+@media(prefers-reduced-motion:reduce){img.imgfx,img.imgfx-in{animation:none}}
 </style>
 <link rel="canonical" href="https://logoicon.cn/">
 <meta property="og:type" content="website">
@@ -1268,22 +1295,40 @@ function normalizeLinks(){
     a.setAttribute('href',to);a.dataset.route='1';
   });
 }
-/* 慢网图片编排：未进视口的图标只显示首字占位，进入视口附近才发真实请求，
-   避免浏览器在弱网下放宽 lazy 阈值、把整馆几十张图一次性并发拖垮。 */
-const IMG_IO=('IntersectionObserver' in window)?new IntersectionObserver((entries,obs)=>{
+/* img-fx 风格加载动画 + 受控懒加载：一个共享 IntersectionObserver 同时管
+   ① 视口内才发真实图片请求（弱网下别整馆并发）② 离屏暂停马赛克动画（对齐 img-fx 的性能策略）。 */
+const FX_IO=('IntersectionObserver' in window)?new IntersectionObserver(entries=>{
   entries.forEach(en=>{
-    if(!en.isIntersecting)return;
-    const img=en.target;obs.unobserve(img);
-    const s=img.dataset.src;if(!s)return;
-    delete img.dataset.src;img.classList.remove('lazy-img');img.src=s;
+    const img=en.target;
+    if(!img.isConnected||img.dataset.fbDone){try{FX_IO.unobserve(img)}catch(e){};return}
+    if(en.isIntersecting){
+      img.classList.add('imgfx-on');
+      const s=img.dataset.src;
+      if(s){delete img.dataset.src;img.classList.remove('lazy-img');img.src=s}
+    }else img.classList.remove('imgfx-on');
   });
 },{rootMargin:'200px 0px',threshold:.01}):null;
+function fxStop(img){
+  img.classList.remove('imgfx','imgfx-on','lazy-img');
+  try{FX_IO.unobserve(img)}catch(e){}
+}
+function imgReady(el){
+  const src=el.getAttribute('src')||'';
+  if(el.dataset.src||src.startsWith('data:')||src.startsWith('blob:'))return; /* 忽略占位图自身的 load */
+  fxStop(el);el.classList.add('imgfx-in');
+}
 function observeImages(){
-  const list=document.querySelectorAll('img[data-src]');
+  const list=document.querySelectorAll('img[data-fx]');
   if(!list.length)return;
   list.forEach(img=>{
-    if(!IMG_IO){const s=img.dataset.src;delete img.dataset.src;img.classList.remove('lazy-img');img.src=s;return}
-    IMG_IO.observe(img);
+    if(img.dataset.fxWatched)return;
+    img.dataset.fxWatched='1';
+    if(!FX_IO){
+      img.classList.add('imgfx-on');
+      const s=img.dataset.src;if(s){delete img.dataset.src;img.classList.remove('lazy-img');img.src=s}
+      return;
+    }
+    FX_IO.observe(img);
   });
 }
 /* wall 等视图会通过 requestAnimationFrame 动态补节点，用防抖观察器兜底规范化链接与图片 */
@@ -1308,6 +1353,17 @@ function asset(u){
 /* 缩略图兜底：占位图带应用首字，外链加载失败自动回退，避免破图/纯灰块 */
 const PH_COLORS=[['#eef2f7','#5b6b80'],['#f7efe8','#8a6b52'],['#eaf3ee','#4f7a63'],
   ['#f2eef7','#6f5b8a'],['#f7eef0','#8a5b67'],['#f5f2e7','#7a7148']];
+function fxPalette(name){
+  const s=String(name||'图标').trim()||'图标';
+  return PH_COLORS[[...s].reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,7)%PH_COLORS.length];
+}
+/* 加载中占位：透明底 + 半透明首字，让下方的 CSS 像素马赛克动画透出来 */
+function fxPlaceholder(name){
+  const s=String(name||'图标').trim()||'图标';
+  const [,fg]=fxPalette(s);
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><text x="64" y="86" font-family="Helvetica,Arial,sans-serif" font-size="58" font-weight="700" fill="'+fg+'" fill-opacity=".34" text-anchor="middle">'+esc([...s][0]||'图')+'</text></svg>';
+  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
 function placeholderFor(name){
   const s=String(name||'图标').trim()||'图标';
   const ch=[...s][0]||'图';
@@ -1319,6 +1375,7 @@ function placeholderFor(name){
 function imgFallback(el){
   if(el.dataset.fbDone)return;
   el.dataset.fbDone='1';
+  fxStop(el);                       /* 失败后停掉动画，落到静态首字占位图 */
   el.src=el.dataset.fb||PLACEHOLDER;
 }
 /* 跨境链路偶发超时：同一 URL 退避重试 2 次，仍失败才落到首字占位图，不再出现破图 */
@@ -1363,8 +1420,9 @@ function imgTag(u,cls='',alt='',eager=false){
   const local=src.startsWith('data:')||src.startsWith('blob:');
   if(FILE_MODE||eager||local)
     return `<img src="${esc(src)}" data-fb="${esc(fb)}" class="${esc(cls)}" alt="${esc(alt)}" loading="${eager?'eager':'lazy'}" decoding="async" referrerpolicy="no-referrer" onerror="imgRetry(this)">`;
-  /* 先显示带应用首字的占位图，进入视口才请求真实图片 */
-  return `<img src="${esc(fb)}" data-src="${esc(src)}" data-fb="${esc(fb)}" class="lazy-img ${esc(cls)}" alt="${esc(alt)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="imgRetry(this)">`;
+  /* 加载中：透明首字叠在 CSS 像素马赛克动画上；进入视口才请求真实图片 */
+  const [fxBg]=fxPalette(alt||'图标');
+  return `<img src="${esc(fxPlaceholder(alt||'图标'))}" data-src="${esc(src)}" data-fb="${esc(fb)}" data-fx="1" class="lazy-img imgfx ${esc(cls)}" style="--fx-bg:${fxBg}" alt="${esc(alt)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="imgReady(this)" onerror="imgRetry(this)">`;
 }
 function toast(msg,ms=2200){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),ms)}
 function copy(text){navigator.clipboard?.writeText(text).then(()=>toast(I.copied.zh)).catch(()=>toast(text))}
