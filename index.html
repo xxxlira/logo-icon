@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="theme-color" content="#ffffff">
+<script>/* 无 # 的 History 路由：线上把相对资源锚定到站点根，并把老的 #/ 书签迁到干净路径；
+   file:// 离线单文件母版不注入 base、不走 history，保持原有相对路径与 hash 导航。 */
+if(location.protocol!=='file:'){
+  var _rb=document.createElement('base');_rb.href='/';document.head.appendChild(_rb);
+  if(location.hash.indexOf('#/')===0){try{history.replaceState(null,'',location.hash.slice(1)||'/')}catch(e){}}
+}</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20width%3D%22500%22%20height%3D%22500%22%20viewBox%3D%220%200%20500%20500%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cg%20filter%3D%22url%28%23filter0_i_3019_132%29%22%3E%3Cpath%20d%3D%22M256.929%2060.0043C261.033%2060.0043%20264.681%2062.5906%20266.156%2066.4214C295.709%20143.2%20356.811%20204.315%20433.582%20233.885C437.412%20235.36%20439.997%20239.007%20439.997%20243.111V256.899C439.997%20261.003%20437.412%20264.65%20433.583%20266.125C356.821%20295.698%20295.727%20356.81%20266.177%20433.583C264.703%20437.414%20261.055%20440%20256.95%20440H243.081C238.976%20440%20235.329%20437.414%20233.854%20433.583C204.3%20356.8%20143.193%20295.681%2066.4164%20266.113C62.5864%20264.638%2060.001%20260.991%2060.001%20256.886V243.108C60.001%20239.004%2062.5861%20235.357%2066.4157%20233.882C143.182%20204.311%20204.281%20143.197%20233.833%2066.4214C235.307%2062.5906%20238.955%2060.0043%20243.06%2060.0043H256.929Z%22%20fill%3D%22url%28%23paint0_linear_3019_132%29%22/%3E%3C/g%3E%3Cpath%20d%3D%22M439.996%20256.896C439.996%20261%20437.411%20264.647%20433.582%20266.123C356.821%20295.695%20295.727%20356.808%20266.177%20433.581C264.748%20437.291%20261.281%20439.834%20257.334%20439.99H250.004V249.985H439.996V256.896Z%22%20fill%3D%22url%28%23paint1_linear_3019_132%29%22/%3E%3Cmask%20id%3D%22mask0_3019_132%22%20style%3D%22mask-type%3Aalpha%22%20maskUnits%3D%22userSpaceOnUse%22%20x%3D%2260%22%20y%3D%2260%22%20width%3D%22380%22%20height%3D%22380%22%3E%3Cpath%20d%3D%22M256.927%2060C261.031%2060%20264.679%2062.5863%20266.154%2066.4171C295.707%20143.197%20356.81%20204.313%20433.581%20233.882C437.411%20235.358%20439.996%20239.005%20439.996%20243.109V256.895C439.996%20260.998%20437.411%20264.645%20433.582%20266.121C356.82%20295.694%20295.726%20356.806%20266.176%20433.579C264.702%20437.41%20261.054%20439.996%20256.949%20439.996H243.08C238.975%20439.996%20235.328%20437.41%20233.853%20433.579C204.299%20356.795%20143.192%20295.677%2066.4154%20266.109C62.5855%20264.634%2060%20260.986%2060%20256.882V243.105C60%20239.001%2062.5851%20235.354%2066.4147%20233.878C143.182%20204.307%20204.281%20143.194%20233.833%2066.4172C235.307%2062.5863%20238.955%2060%20243.06%2060H256.927Z%22%20fill%3D%22url%28%23paint2_linear_3019_132%29%22/%3E%3C/mask%3E%3Cg%20mask%3D%22url%28%23mask0_3019_132%29%22%3E%3Cg%20filter%3D%22url%28%23filter1_f_3019_132%29%22%3E%3Ccircle%20cx%3D%22430.81%22%20cy%3D%22443.747%22%20r%3D%22194.371%22%20fill%3D%22%23FFAEE4%22/%3E%3C/g%3E%3C/g%3E%3Cdefs%3E%3Cfilter%20id%3D%22filter0_i_3019_132%22%20x%3D%2260.001%22%20y%3D%2247.0453%22%20width%3D%22379.996%22%20height%3D%22392.955%22%20filterUnits%3D%22userSpaceOnUse%22%20color-interpolation-filters%3D%22sRGB%22%3E%3CfeFlood%20flood-opacity%3D%220%22%20result%3D%22BackgroundImageFix%22/%3E%3CfeBlend%20mode%3D%22normal%22%20in%3D%22SourceGraphic%22%20in2%3D%22BackgroundImageFix%22%20result%3D%22shape%22/%3E%3CfeColorMatrix%20in%3D%22SourceAlpha%22%20type%3D%22matrix%22%20values%3D%220%200%200%200%200%200%200%200%200%200%200%200%200%200%200%200%200%200%20127%200%22%20result%3D%22hardAlpha%22/%3E%3CfeOffset%20dy%3D%22-12.959%22/%3E%3CfeGaussianBlur%20stdDeviation%3D%2212.959%22/%3E%3CfeComposite%20in2%3D%22hardAlpha%22%20operator%3D%22arithmetic%22%20k2%3D%22-1%22%20k3%3D%221%22/%3E%3CfeColorMatrix%20type%3D%22matrix%22%20values%3D%220%200%200%200%201%200%200%200%200%200.9883%200%200%200%200%200.899715%200%200%200%200.6%200%22/%3E%3CfeBlend%20mode%3D%22normal%22%20in2%3D%22shape%22%20result%3D%22effect1_innerShadow_3019_132%22/%3E%3C/filter%3E%3Cfilter%20id%3D%22filter1_f_3019_132%22%20x%3D%22171.645%22%20y%3D%22184.581%22%20width%3D%22518.331%22%20height%3D%22518.331%22%20filterUnits%3D%22userSpaceOnUse%22%20color-interpolation-filters%3D%22sRGB%22%3E%3CfeFlood%20flood-opacity%3D%220%22%20result%3D%22BackgroundImageFix%22/%3E%3CfeBlend%20mode%3D%22normal%22%20in%3D%22SourceGraphic%22%20in2%3D%22BackgroundImageFix%22%20result%3D%22shape%22/%3E%3CfeGaussianBlur%20stdDeviation%3D%2232.3974%22%20result%3D%22effect1_foregroundBlur_3019_132%22/%3E%3C/filter%3E%3ClinearGradient%20id%3D%22paint0_linear_3019_132%22%20x1%3D%22200.596%22%20y1%3D%22157.681%22%20x2%3D%22258.315%22%20y2%3D%22304.196%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20stop-color%3D%22%23FFE8C0%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23FFA6AB%22/%3E%3C/linearGradient%3E%3ClinearGradient%20id%3D%22paint1_linear_3019_132%22%20x1%3D%22252.115%22%20y1%3D%22251.039%22%20x2%3D%22252.115%22%20y2%3D%22439.989%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20stop-color%3D%22%23F457CC%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23F457CC%22%20stop-opacity%3D%220%22/%3E%3C/linearGradient%3E%3ClinearGradient%20id%3D%22paint2_linear_3019_132%22%20x1%3D%22200.595%22%20y1%3D%22157.677%22%20x2%3D%22258.314%22%20y2%3D%22304.192%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20stop-color%3D%22%23FBEACC%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23FCB5B9%22/%3E%3C/linearGradient%3E%3C/defs%3E%3C/svg%3E">
 <title>APP LOGO 图标收藏馆</title>
 <meta name="description" content="APP LOGO 图标收藏馆 — 浏览、发现优秀的 App 图标设计，按分类、配色与设计师自由探索。">
@@ -1201,7 +1207,7 @@ async function publishNow(){
   }
 }
 function viewCloudLogin(){
-  const url=location.href.split('#')[0]+'#/admin';
+  const url=FILE_MODE?'#/admin':(location.origin+'/admin');
   $('#view').innerHTML=`<div class="card" style="max-width:420px;margin:64px auto;padding:28px">
     <h1 style="margin:0 0 4px;font-size:22px">在线管理</h1>
     <p class="small muted" style="margin:0 0 20px">登录后可在线编辑馆藏；改动先暂存本机，点「发布到线上」后才对所有访客生效。</p>
@@ -1251,6 +1257,41 @@ function log(text){
   try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}
 }
 
+/* ---------- 路由模式：线上 History API（无 #），离线 file:// 母版保留 hash ---------- */
+const FILE_MODE=location.protocol==='file:';
+function routeRaw(){return FILE_MODE?(location.hash.slice(1)||'/'):((location.pathname||'/')+(location.search||''))}
+function isAdminPath(){return route().path.indexOf('/admin')===0}
+function normalizeLinks(){
+  if(FILE_MODE)return;
+  document.querySelectorAll('a[href^="#/"]').forEach(a=>{
+    const to=a.getAttribute('href').slice(1)||'/';
+    a.setAttribute('href',to);a.dataset.route='1';
+  });
+}
+/* 慢网图片编排：未进视口的图标只显示首字占位，进入视口附近才发真实请求，
+   避免浏览器在弱网下放宽 lazy 阈值、把整馆几十张图一次性并发拖垮。 */
+const IMG_IO=('IntersectionObserver' in window)?new IntersectionObserver((entries,obs)=>{
+  entries.forEach(en=>{
+    if(!en.isIntersecting)return;
+    const img=en.target;obs.unobserve(img);
+    const s=img.dataset.src;if(!s)return;
+    delete img.dataset.src;img.classList.remove('lazy-img');img.src=s;
+  });
+},{rootMargin:'200px 0px',threshold:.01}):null;
+function observeImages(){
+  const list=document.querySelectorAll('img[data-src]');
+  if(!list.length)return;
+  list.forEach(img=>{
+    if(!IMG_IO){const s=img.dataset.src;delete img.dataset.src;img.classList.remove('lazy-img');img.src=s;return}
+    IMG_IO.observe(img);
+  });
+}
+/* wall 等视图会通过 requestAnimationFrame 动态补节点，用防抖观察器兜底规范化链接与图片 */
+if(!FILE_MODE){
+  let _nlT;
+  try{new MutationObserver(()=>{clearTimeout(_nlT);_nlT=setTimeout(()=>{normalizeLinks();observeImages()},60)})
+    .observe(document.documentElement,{childList:true,subtree:true})}catch(e){}
+}
 /* ---------- asset + helpers ---------- */
 const PLACEHOLDER='data:image/svg+xml;base64,'+btoa('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96"><rect width="96" height="96" fill="#f1f1f0"/></svg>');
 function asset(u){
@@ -1280,6 +1321,15 @@ function imgFallback(el){
   el.dataset.fbDone='1';
   el.src=el.dataset.fb||PLACEHOLDER;
 }
+/* 跨境链路偶发超时：同一 URL 退避重试 2 次，仍失败才落到首字占位图，不再出现破图 */
+function imgRetry(el){
+  if(el.dataset.fbDone)return;
+  const src=el.getAttribute('src')||'';
+  if(!src||src.startsWith('data:')||src.startsWith('blob:')){imgFallback(el);return}
+  const n=Number(el.dataset.try||0);
+  if(n<2){el.dataset.try=String(n+1);setTimeout(()=>{if(el.isConnected&&!el.dataset.fbDone)el.src=src},700*(n+1));return}
+  imgFallback(el);
+}
 /* 外链图片看门狗：加载失败或长时间挂起时统一回退，避免出现破图/空白格 */
 function checkImages(){
   const now=Date.now();
@@ -1298,7 +1348,7 @@ function checkImages(){
   });
 }
 function armImgWatch(){
-  const schedule=()=>{clearTimeout(armImgWatch._t);armImgWatch._t=setTimeout(checkImages,1400)};
+  const schedule=()=>{clearTimeout(armImgWatch._t);armImgWatch._t=setTimeout(()=>{observeImages();checkImages()},1400)};
   try{new MutationObserver(schedule).observe(document.body,{childList:true,subtree:true})}catch(e){}
   window.addEventListener('scroll',schedule,{passive:true});
   window.addEventListener('resize',schedule);
@@ -1310,7 +1360,11 @@ function imgTag(u,cls='',alt='',eager=false){
   const fb=placeholderFor(alt||'图标');
   let src=asset(u);
   if(src===PLACEHOLDER)src=fb;
-  return `<img src="${esc(src)}" data-fb="${esc(fb)}" class="${esc(cls)}" alt="${esc(alt)}" loading="${eager?'eager':'lazy'}" referrerpolicy="no-referrer" onerror="imgFallback(this)">`;
+  const local=src.startsWith('data:')||src.startsWith('blob:');
+  if(FILE_MODE||eager||local)
+    return `<img src="${esc(src)}" data-fb="${esc(fb)}" class="${esc(cls)}" alt="${esc(alt)}" loading="${eager?'eager':'lazy'}" decoding="async" referrerpolicy="no-referrer" onerror="imgRetry(this)">`;
+  /* 先显示带应用首字的占位图，进入视口才请求真实图片 */
+  return `<img src="${esc(fb)}" data-src="${esc(src)}" data-fb="${esc(fb)}" class="lazy-img ${esc(cls)}" alt="${esc(alt)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="imgRetry(this)">`;
 }
 function toast(msg,ms=2200){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),ms)}
 function copy(text){navigator.clipboard?.writeText(text).then(()=>toast(I.copied.zh)).catch(()=>toast(text))}
@@ -1475,8 +1529,14 @@ function applyFilters(list,p){
   if(p.get('style')){const s=p.get('style');out=out.filter(i=>s==='__none__'?!i.styleSlugs.length:i.styleSlugs.includes(s))}
   return out;
 }
-function route(){const h=location.hash.slice(1)||'/';const [path,qs]=h.split('?');return {path:path||'/',p:new URLSearchParams(qs||'')}}
-function go(to){if(location.hash==='#'+to){render()}else location.hash='#'+to}
+function route(){const raw=routeRaw();const [path,qs]=raw.split('?');return {path:path||'/',p:new URLSearchParams(qs||'')}}
+function go(to){
+  to=to||'/';
+  if(FILE_MODE){if(location.hash==='#'+to)render();else location.hash='#'+to;return}
+  if(routeRaw()===to){render();return}
+  try{history.pushState(null,'',to)}catch(e){location.href=to;return}
+  render();
+}
 function qsSet(obj){const p=new URLSearchParams();Object.entries(obj).forEach(([k,v])=>{if(v)p.set(k,v)});return '/?'+p.toString()}
 
 /* ---------- nav ---------- */
@@ -1484,8 +1544,8 @@ function renderNav(){
   $('#nav').innerHTML=`<header class="nav"><div class="nav-inner">
     <a class="brand" href="#/" title="APP LOGO 图标收藏馆"><img class="brand-logo" src="${esc(brandLogo())}" alt="APP LOGO 图标收藏馆"></a>
     <div class="nav-right">
-      <a class="nav-link ${location.hash.startsWith('#/about')?'active':''}" href="#/about">${esc(t('about'))}</a>
-      <a class="nav-link ${location.hash.startsWith('#/wall')?'active':''}" href="#/wall">${esc(t('wall'))}</a>
+      <a class="nav-link ${route().path.startsWith('/about')?'active':''}" href="#/about">${esc(t('about'))}</a>
+      <a class="nav-link ${route().path.startsWith('/wall')?'active':''}" href="#/wall">${esc(t('wall'))}</a>
     </div>
   </div></header>`;
 }
@@ -1786,7 +1846,7 @@ function viewWall(){
       if(cells.has(k))continue;
       const ic=icons[(mod(r,rows)*cols+mod(col,cols))%icons.length];
       const a=document.createElement('a');
-      a.className='wall-cell';a.href='#/apps/'+ic.slug;a.dataset.k=k;a.draggable=false;
+      a.className='wall-cell';a.href=(FILE_MODE?'#':'')+'/apps/'+ic.slug;if(!FILE_MODE)a.dataset.route='1';a.dataset.k=k;a.draggable=false;
       a.style.left=(col*STEP)+'px';a.style.top=(r*STEP)+'px';
       a.innerHTML=`<div class="inner">${imgTag(ic.url,'',ic.name,true)}</div><span class="wall-label">${esc(ic.name)}</span>`;
       a.addEventListener('click',e=>{if(suppress){e.preventDefault();e.stopPropagation();suppress=false}},true);
@@ -1832,7 +1892,7 @@ function viewWall(){
     if(!pointers.size){
       c.classList.remove('dragging');
       if(moved>6)suppress=true;
-      else if(e.type==='pointerup'&&downHref)location.hash=downHref;
+      else if(e.type==='pointerup'&&downHref){suppress=true;go(String(downHref).replace(/^#/,''))}
       lastInput=performance.now();
     }
     downHref=null;
@@ -1890,7 +1950,7 @@ function viewLogin(){
     <div class="divider"></div>
     <div class="tiny muted">管理入口地址（首页不展示入口，请收藏此地址）</div>
     <div class="row" style="gap:8px;margin-top:8px"><input class="input admin-url grow" id="li-url" readonly value="${esc(url)}"><button class="btn sm" style="white-space:nowrap;flex-shrink:0" data-act="copyadminurl">复制</button></div></div>`;
-  if(locked)setTimeout(()=>{if(location.hash.startsWith('#/admin'))render()},1000);
+  if(locked)setTimeout(()=>{if(isAdminPath())render()},1000);
 }
 function selectOptions(list,val,label='name',key='slug'){
   return list.map(x=>`<option value="${esc(x[key])}" ${x[key]===val?'selected':''}>${esc(x[label])}</option>`).join('');
@@ -2917,7 +2977,7 @@ function viewAdminSecurity(){
         <div class="kpi" style="margin-bottom:12px"><span class="k">当前状态</span><b style="font-size:18px">${secs>0?'已锁定 '+secs+' 秒':'正常'}</b></div>
         <div class="tiny muted">连续失败次数：${g.fails} · 会话：${sessionValid()?'有效':'未登录或已过期'}</div>
         <div class="divider"></div>
-        <div class="tiny muted">首页已移除后台入口；管理员请通过 <span class="mono">#/admin</span> 管理网址登录。</div>
+        <div class="tiny muted">首页已移除后台入口；管理员请通过 <span class="mono">/admin</span> 管理网址登录。</div>
         <div class="row wrap" style="gap:10px;margin-top:14px"><button class="btn" data-act="resetguard">解除锁定 / 重置失败次数</button><button class="btn" data-act="testbanner">测试防护提示</button></div>
       </div>
     </div>
@@ -3059,9 +3119,17 @@ function render(){
   else if(path==='/wall')viewWall();
   else if(path.startsWith('/admin'))viewAdmin(path);
   else view404();
+  normalizeLinks();observeImages();
   window.scrollTo(0,0);
 }
 
+/* 站内路由：拦截规范化后的链接，用 pushState 切换视图，地址栏保持无 # */
+document.addEventListener('click',e=>{
+  if(FILE_MODE||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
+  const a=e.target.closest&&e.target.closest('a[data-route]');
+  if(!a||a.hasAttribute('download')||(a.target&&a.target!=='_self'))return;
+  e.preventDefault();go(a.getAttribute('href'));
+});
 /* ---------- global delegated actions ---------- */
 document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]');if(!el)return;
@@ -3342,7 +3410,7 @@ document.addEventListener('click',e=>{
         .catch(()=>{}).finally(async()=>{
           CLOUD.authed=false;clearDraft();
           try{localStorage.removeItem(KEY)}catch(e){}
-          location.hash='#/';
+          go('/');
           await loadSiteManifest(true);render();
         });
       break}
@@ -3395,7 +3463,7 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();document.querySelector('[data-act="cmslogin"]')?.click();
   }
 });
-window.addEventListener('hashchange',render);
+if(FILE_MODE)window.addEventListener('hashchange',render);else window.addEventListener('popstate',render);
 let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().path==='/'){const g=$('#grid');if(g)g.innerHTML=gridHTML(applyFilters(browseIcons(),route().p))}},180)});
 
 /* ---------- boot ---------- */
@@ -3405,7 +3473,7 @@ applySecurity();render();
   await probeCMS();
   /* 后台渲染单独兜错：本机缓存若因版本升级缺字段导致 render 抛错，
      也不能阻断后面的清单同步（否则旧 base64 缓存永远清不掉）。 */
-  try{if(CLOUD.available&&location.hash.startsWith('#/admin'))render()}catch(e){}
+  try{if(CLOUD.available&&isAdminPath())render()}catch(e){}
   await loadSiteManifest();
 })();
 </script>
