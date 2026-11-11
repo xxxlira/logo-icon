@@ -475,6 +475,7 @@ async function handlePost(ctx) {
   if (!await authed(request, env)) return json({ error: '登录已失效（401）：请重新打开 https://logoicon.cn/admin 并输入管理员密码。草稿仍在本机，不会丢失。' }, 401);
 
   if (body.action === 'save') {
+    const saveT0 = Date.now();   /* 第 45 轮：把服务端耗时回传，便于区分链路慢 / GitHub 慢 */
     const p = publicPayload(body.db || {});
     const pubId = safePubId(body.pubId);
     p.publishId = pubId;
@@ -494,7 +495,8 @@ async function handlePost(ctx) {
        必须放在「旧草稿覆盖」护栏之前，否则重试会被误判并拒绝。 */
     if (pubId && oldM && oldM.publishId === pubId) {
       return json({ ok: true, already: true, sha: '', generatedAt: oldM.generatedAt,
-        skippedBuild: true, total: 0, chunks: 0, refs: [], mapped: [] });
+        skippedBuild: true, total: 0, chunks: 0, refs: [], mapped: [],
+        serverMs: Date.now() - saveT0 });
     }
     if (oldCount >= 20 && newCount < oldCount * 0.5 && oldCount - newCount >= 20) {
       return json({
@@ -523,7 +525,8 @@ async function handlePost(ctx) {
       return json({ ok: true, chunk: true, total: totalForUI, written: slice.length, next,
         sha, skippedBuild: true, generatedAt: p.generatedAt,
         refs: slice.map(f => f.ref).filter(Boolean),
-        mapped: mapped.filter(r => paths.has(r.path)) });
+        mapped: mapped.filter(r => paths.has(r.path)),
+        serverMs: Date.now() - saveT0 });
     }
 
     /* 最后一批（或图片不多时的一次性提交）：写清单、页面，并回收孤儿图片。
@@ -555,7 +558,8 @@ async function handlePost(ctx) {
     return json({ ok: true, sha, files: items.length, generatedAt: p.generatedAt,
       skippedBuild, total: totalForUI,
       refs: images.map(f => f.ref).filter(Boolean), mapped,
-      chunks: remaining > BATCH_SIZE ? Math.ceil(remaining / BATCH_SIZE) : 0 });
+      chunks: remaining > BATCH_SIZE ? Math.ceil(remaining / BATCH_SIZE) : 0,
+      serverMs: Date.now() - saveT0 });
   }
   return json({ error: '未知操作' }, 400);
 }

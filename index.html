@@ -954,6 +954,23 @@ const PUB_KEY='iconmuseum_pubid_v1',PUB_TTL=30*60*1000;
    真正发出 save 之前把发布掐死；放宽前置探测、提交超时与重试次数。 */
 const POST_TIMEOUT=150000,POST_RETRIES=4,CMS_GET_TIMEOUT=30000;
 const PRE_SESSION_TIMEOUT=45000,PRE_VERIFY_TIMEOUT=30000;
+/* 第 45 轮：三道只读核对并行，且总预算 20 秒。核对只是「尽力而为」，
+   超时直接提交，服务端仍会校验登录态（401）与 publishId 幂等，不会误发布。 */
+const PRE_PROBE_BUDGET=20000;
+/* 统计本次发布要上传的新图数量，把「大包上传慢」如实告诉管理员 */
+function countDataURL(db){
+  let n=0;
+  try{
+    for(const a of db.apps||[]){
+      for(const ic of a.icons||[])for(const f of ['url','hdUrl'])
+        if(String(ic[f]||'').startsWith('data:image/'))n++;
+      for(const ri of ((a.app||{}).relatedImages)||[])
+        if(String(ri.url||'').startsWith('data:image/'))n++;
+      if(String(a.defaultIconUrl||'').startsWith('data:image/'))n++;
+    }
+  }catch(e){}
+  return n;
+}
 function cmsURL(action){return 'api/cms?action='+action}
 async function cmsGet(action,timeout){
   const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),timeout||CMS_GET_TIMEOUT);
@@ -1136,8 +1153,10 @@ function publishStatusHTML(){
   if(st==='publishing'){
     const sec=Math.max(0,Math.round((Date.now()-(CLOUD.startedAt||Date.now()))/1000));
     const retry=CLOUD.retry>0?' · 已自动重试 '+CLOUD.retry+' 次':'';
+    const stage=CLOUD.stage?' · '+h(CLOUD.stage):'';
+    const slow=sec>=20?'<br><span class="tiny muted">跨境链路每个请求要 1–13 秒；含新图时还要串行写入 GitHub 并等站点构建，这一步本来就要一两分钟，不是卡住。</span>':'';
     return `<div class="publish-status working"><span class="ps-spin" aria-hidden="true"></span>
-      <span><b>正在发布到线上…</b> 已等待 ${sec} 秒${retry}<br><span class="tiny">${CLOUD.progress?h(CLOUD.progress)+' · ':''}正在把改动写回 GitHub；断连会自动核对线上状态，不会重复提交，请不要关闭页面。</span></span></div>`;
+      <span><b>正在发布到线上…</b>${stage} · 已等待 ${sec} 秒${retry}<br><span class="tiny">${CLOUD.progress?h(CLOUD.progress)+' · ':''}正在把改动写回 GitHub；断连会自动核对线上状态，不会重复提交，请不要关闭页面。</span>${slow}</span></div>`;
   }
   if(st==='error'){
     return `<div class="publish-status failed"><span><b>发布失败</b><br>
@@ -1153,7 +1172,7 @@ function publishStatusHTML(){
   const commit=r.sha?`提交 <code>${h(String(r.sha).slice(0,8))}</code> · `:'';
   const link=r.sha?`<a class="btn sm" target="_blank" rel="noopener noreferrer" href="https://github.com/xxxlira/logo-icon-museum/commit/${h(r.sha)}">查看提交 ↗</a>`:'';
   return `<div class="publish-status done"><span><b>已发布到线上</b> · ${h(r.time)}${extra}<br>
-    <span class="tiny">${commit}${r.chunks>1?'分 '+r.chunks+' 批上传 '+r.total+' 张图片 · ':''}${r.skippedBuild?'纯文字改动，访客刷新即可看到':'含新图片，约 1–2 分钟后全站生效'}</span></span>
+    <span class="tiny">${commit}${r.chunks>1?'分 '+r.chunks+' 批上传 '+r.total+' 张图片 · ':''}${r.skippedBuild?'纯文字改动，访客刷新即可看到':'含新图片，约 1–2 分钟后全站生效'}${r.serverMs?' · 服务端写入 '+Math.round(r.serverMs/1000)+' 秒':''}</span></span>
     <span style="flex:1"></span>${link}</div>`;
 }
 function updatePublishUI(){const slot=$('#publish-slot');if(slot)slot.innerHTML=publishStatusHTML()}
@@ -1185,7 +1204,7 @@ async function finishPublish(o){
   CLOUD.error='';CLOUD.state='done';
   CLOUD.result={time:new Date().toLocaleTimeString('zh-CN',{hour12:false}),
     sha:o.sha||'',skippedBuild:!!o.skippedBuild,chunks:o.chunks||0,total:o.total||0,
-    already:!!o.already,synced:!!o.synced};
+    already:!!o.already,synced:!!o.synced,serverMs:o.serverMs||0};
   clearDraft();
   await alignPublishedImages();
   toast(o.synced?'线上内容与本机一致，无需重复发布':
@@ -1204,37 +1223,51 @@ async function publishNow(){
   },1000);
   updateDraftUI();
   try{
-    /* 第 44 轮核心修复：登录态复查改为「尽力而为」，不再做 15s 硬门槛。
-       旧写法在跨境抖动时，会在真正发出 action=save 之前就把整次发布判成
-       网络失败（远端一个提交都不会有），点重试又走同一条死路。
-       只有服务端明确回答「未登录」才终止；超时/断连交给后端 401 裁决。 */
-    CLOUD.stage='核对登录态';
-    let s=null,preErr=null;
-    try{s=await cmsGet('session',PRE_SESSION_TIMEOUT)}catch(e){preErr=e}
+    /* 第 44 轮：登录态复查改为「尽力而为」，不再做 15s 硬门槛。
+       第 45 轮：三道只读核对改为并行 + 20 秒总预算。
+       实测跨境链路下 45 字节的 session 也要付 1~13 秒「过路费」，
+       串行三次最坏白等 165 秒且一个字节都没写入。超时就直接发 save：
+       服务端仍会校验登录态（401）与 publishId 幂等，不会误发布或重复提交。 */
+    CLOUD.stage='并行核对登录态 / 上次发布 / 线上内容';
+    const pubId=pendingPubId()||newPubId();
+    keepPubId(pubId);
+    let preErr=null;
+    const probe=Promise.all([
+      cmsGet('session',PRE_SESSION_TIMEOUT).catch(e=>{preErr=e;return null}),
+      verifyPublish(pubId),
+      alreadySynced().catch(()=>false)
+    ]);
+    const budget=new Promise(r=>setTimeout(()=>r(['__r45_budget__',null,false]),PRE_PROBE_BUDGET));
+    const row=await Promise.race([probe,budget]);
+    const budgetHit=row[0]==='__r45_budget__';
+    const s=budgetHit?null:row[0],v=row[1],synced=row[2];
+    if(budgetHit){
+      CLOUD.diag='前置核对超过 '+Math.round(PRE_PROBE_BUDGET/1000)+' 秒，已直接开始提交（服务端会校验登录态与重复发布）';
+      CLOUD.progress='跨境链路较慢，跳过等待直接提交';
+      updatePublishUI();
+    }else if(!s){
+      CLOUD.diag='登录态探测：'+(preErr?readableNetError(preErr):'接口未返回 JSON')+'；已跳过前置等待';
+    }
     if(s&&!s.authed){
       CLOUD.authed=false;
       throw new Error('登录已失效，请重新登录（Cookie 有效期 7 天且按域名隔离：从 pages.dev 换到 logoicon.cn 需重新输密码）。草稿仍保留在本机。');
     }
-    if(!s){
-      CLOUD.progress='登录态探测超时，直接尝试提交（服务端会再校验一次）';
-      CLOUD.diag='登录态探测：'+(preErr?readableNetError(preErr):'接口未返回 JSON')+'；已跳过前置等待';
-      updatePublishUI();
-    }
-    /* 整次发布共用一个 pubId：断连重试时后端据此判定「其实已发布成功」。 */
-    CLOUD.stage='核对上次发布结果';
-    const pubId=pendingPubId()||newPubId();
-    keepPubId(pubId);
-    const v=await verifyPublish(pubId);
     if(v&&v.published){await finishPublish({already:true,generatedAt:v.generatedAt,skippedBuild:true});return}
-    CLOUD.stage='比对线上内容';
-    if(await alreadySynced()){await finishPublish({synced:true,skippedBuild:true});return}
+    if(synced){await finishPublish({synced:true,skippedBuild:true});return}
     let offset=0,chunks=0,total=0,j=null;
     for(let guard=0;guard<200;guard++){
       CLOUD.stage='提交第 '+(chunks+1)+' 批';
       const body={action:'save',db:publicDB(),offset,pubId,incremental:true,total};
+      /* 实测 200KB 要 8 秒、1MB 会 60 秒超时零上传：大包给更长超时并如实显示 */
+      const bodyKB=Math.max(1,Math.round(JSON.stringify(body).length/1024));
+      const pics=countDataURL(body.db);
+      const thisTimeout=bodyKB>400?240000:POST_TIMEOUT;
+      CLOUD.progress='本批约 '+bodyKB+' KB'+(pics?' · 含 '+pics+' 张新图':'')+
+        (chunks?' · 第 '+(chunks+1)+' 批':'')+(bodyKB>400?' · 大包上传较慢，请耐心等待':'');
+      updatePublishUI();
       let resp=null;
       for(let attempt=0;;attempt++){
-        try{resp=await postJSON(body);break}
+        try{resp=await postJSON(body,thisTimeout);break}
         catch(e){
           if(!isNetworkError(e)||attempt>=POST_RETRIES)throw e;
           CLOUD.retry++;
@@ -1263,7 +1296,7 @@ async function publishNow(){
     }
     if(!j||j.chunk)throw new Error('发布批次异常中断，请重试');
     await finishPublish({sha:j.sha||'',generatedAt:j.generatedAt,
-      skippedBuild:!!j.skippedBuild,chunks,total:total||j.total||0});
+      skippedBuild:!!j.skippedBuild,chunks,total:total||j.total||0,serverMs:j.serverMs||0});
   }catch(e){
     CLOUD.error=readableNetError(e)+
       (isNetworkError(e)?'。请点「重试发布」，会先自动核对线上状态，不会重复提交。':'');
