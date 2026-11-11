@@ -950,7 +950,10 @@ let PUBLISH_TIMER=null;
  *   - 每批返回 refs，前端把本机 dataURL 换成已上传的相对路径，
  *     后续批次只带「还没上传」的图片，不再反复重发整馆（旧版每批重发几 MB）。 */
 const PUB_KEY='iconmuseum_pubid_v1',PUB_TTL=30*60*1000;
-const POST_TIMEOUT=90000,POST_RETRIES=3,CMS_GET_TIMEOUT=25000;
+/* 第 44 轮：跨境链路实测 /api/cms GET 会到 28~40s，旧版 15s 硬门槛会在
+   真正发出 save 之前把发布掐死；放宽前置探测、提交超时与重试次数。 */
+const POST_TIMEOUT=150000,POST_RETRIES=4,CMS_GET_TIMEOUT=30000;
+const PRE_SESSION_TIMEOUT=45000,PRE_VERIFY_TIMEOUT=30000;
 function cmsURL(action){return 'api/cms?action='+action}
 async function cmsGet(action,timeout){
   const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),timeout||CMS_GET_TIMEOUT);
@@ -972,6 +975,18 @@ function pendingPubId(){
 }
 function keepPubId(id){try{sessionStorage.setItem(PUB_KEY,JSON.stringify({id,at:Date.now()}))}catch(e){}}
 function dropPubId(){try{sessionStorage.removeItem(PUB_KEY)}catch(e){}}
+/* 只读探测的重试封装：跨境抖动时单个 GET 很容易超时，重试一次的成本
+   远小于一次整包发布失败。只用于 session 之外的只读核对。 */
+async function cmsGetRetry(action,timeout,tries){
+  let last=null;const n=tries||2;
+  for(let i=0;i<n;i++){
+    try{const v=await cmsGet(action,timeout);if(v)return v;
+      last=new Error('接口未返回 JSON（HTTP 错误或响应被拦截）')}
+    catch(e){last=e}
+    if(i<n-1)await new Promise(r=>setTimeout(r,600*(i+1)));
+  }
+  throw last||new Error('连接失败');
+}
 function isNetworkError(e){
   const s=String((e&&e.message)||e).toLowerCase();
   return (e&&e.name==='AbortError')||
@@ -994,8 +1009,14 @@ async function postJSON(body,timeout){
   }finally{clearTimeout(t)}
 }
 /* 断连后只回几十字节核对：线上清单的 publishId 是否就是本次发布 */
+/* 断连核对是「避免重复提交」的唯一依据，15s 太容易超时；放宽并重试一次 */
 async function verifyPublish(pubId){
-  try{return await cmsGet('verify&pubId='+encodeURIComponent(pubId),15000)}catch(e){return null}
+  for(let i=0;i<2;i++){
+    try{const v=await cmsGet('verify&pubId='+encodeURIComponent(pubId),PRE_VERIFY_TIMEOUT);
+      if(v)return v}catch(e){}
+    if(i===0)await new Promise(r=>setTimeout(r,600));
+  }
+  return null;
 }
 /* 后端分批返回 ref：把本机 DB 里对应的 dataURL 换成已写入仓库的相对路径 */
 function applyPublishRefs(refs){
@@ -1026,7 +1047,7 @@ function publishSignature(o){
 /* 发布前先看线上是否已经与本机一致，避免断连后重复点「发布」产生重复提交 */
 async function alreadySynced(){
   try{
-    const cloud=await cmsGet('manifest',20000);
+    const cloud=await cmsGetRetry('manifest',PRE_VERIFY_TIMEOUT,2);
     return !!(cloud&&Array.isArray(cloud.apps)&&
       publishSignature(cloud)===publishSignature(publicDB()));
   }catch(e){return false}
@@ -1037,7 +1058,7 @@ async function alreadySynced(){
    避免跨境链路读到 CDN 上尚未更新的旧清单，把刚发布的元数据冲回去。 */
 async function alignPublishedImages(){
   if(!CLOUD.available||!hasIconDataURL(DB))return;
-  let m=null;try{m=await cmsGet('manifest',20000)}catch(e){}
+  let m=null;try{m=await cmsGetRetry('manifest',PRE_VERIFY_TIMEOUT,2)}catch(e){}
   if(!m||!Array.isArray(m.apps))return;
   const SITE=/^(\.\/)?(icons|thumbs|related)\//,isData=v=>String(v||'').startsWith('data:');
   const bySlug=new Map(m.apps.map(a=>[a&&a.app&&a.app.slug,a]));
@@ -1121,6 +1142,7 @@ function publishStatusHTML(){
   if(st==='error'){
     return `<div class="publish-status failed"><span><b>发布失败</b><br>
       <span class="tiny">${h(CLOUD.error||'未知错误')}</span><br>
+      ${CLOUD.diag?`<span class="tiny muted">${h(CLOUD.diag)}</span><br>`:''}
       <span class="tiny">草稿仍保留在本机，没有丢失。点「重试发布」会先核对线上是否已完成；若已完成会直接转成功，不会重复提交。</span></span>
       <span style="flex:1"></span><button class="btn sm primary" data-act="cmspublish">重试发布</button></div>`;
   }
@@ -1174,7 +1196,7 @@ async function finishPublish(o){
 async function publishNow(){
   if(!CLOUD.available||CLOUD.publishing)return;
   CLOUD.publishing=true;CLOUD.state='publishing';CLOUD.startedAt=Date.now();
-  CLOUD.error='';CLOUD.progress='';CLOUD.retry=0;
+  CLOUD.error='';CLOUD.progress='';CLOUD.retry=0;CLOUD.stage='准备发布';CLOUD.diag='';
   if(PUBLISH_TIMER)clearInterval(PUBLISH_TIMER);
   PUBLISH_TIMER=setInterval(()=>{
     if(CLOUD.state==='publishing')updatePublishUI();
@@ -1182,20 +1204,33 @@ async function publishNow(){
   },1000);
   updateDraftUI();
   try{
-    /* 先确认登录态，避免 401 时白等；错误信息会常驻在状态条里 */
-    const s=await cmsGet('session',15000);
-    if(!s||!s.authed){
+    /* 第 44 轮核心修复：登录态复查改为「尽力而为」，不再做 15s 硬门槛。
+       旧写法在跨境抖动时，会在真正发出 action=save 之前就把整次发布判成
+       网络失败（远端一个提交都不会有），点重试又走同一条死路。
+       只有服务端明确回答「未登录」才终止；超时/断连交给后端 401 裁决。 */
+    CLOUD.stage='核对登录态';
+    let s=null,preErr=null;
+    try{s=await cmsGet('session',PRE_SESSION_TIMEOUT)}catch(e){preErr=e}
+    if(s&&!s.authed){
       CLOUD.authed=false;
-      throw new Error('登录已失效，请重新登录。草稿仍保留在本机，刷新页面重新输入密码即可继续发布。');
+      throw new Error('登录已失效，请重新登录（Cookie 有效期 7 天且按域名隔离：从 pages.dev 换到 logoicon.cn 需重新输密码）。草稿仍保留在本机。');
+    }
+    if(!s){
+      CLOUD.progress='登录态探测超时，直接尝试提交（服务端会再校验一次）';
+      CLOUD.diag='登录态探测：'+(preErr?readableNetError(preErr):'接口未返回 JSON')+'；已跳过前置等待';
+      updatePublishUI();
     }
     /* 整次发布共用一个 pubId：断连重试时后端据此判定「其实已发布成功」。 */
+    CLOUD.stage='核对上次发布结果';
     const pubId=pendingPubId()||newPubId();
     keepPubId(pubId);
     const v=await verifyPublish(pubId);
     if(v&&v.published){await finishPublish({already:true,generatedAt:v.generatedAt,skippedBuild:true});return}
+    CLOUD.stage='比对线上内容';
     if(await alreadySynced()){await finishPublish({synced:true,skippedBuild:true});return}
     let offset=0,chunks=0,total=0,j=null;
     for(let guard=0;guard<200;guard++){
+      CLOUD.stage='提交第 '+(chunks+1)+' 批';
       const body={action:'save',db:publicDB(),offset,pubId,incremental:true,total};
       let resp=null;
       for(let attempt=0;;attempt++){
@@ -1233,6 +1268,10 @@ async function publishNow(){
     CLOUD.error=readableNetError(e)+
       (isNetworkError(e)?'。请点「重试发布」，会先自动核对线上状态，不会重复提交。':'');
     CLOUD.state='error';
+    /* 把失败环节与耗时常驻到状态条，用户一眼就能区分「前置探测超时」
+       /「401 登录失效」/「409 旧草稿护栏」/「GitHub 写入失败」 */
+    CLOUD.diag=(CLOUD.diag?CLOUD.diag+'；':'')+'失败环节：'+(CLOUD.stage||'提交')+
+      ' · 已等待 '+Math.round((Date.now()-(CLOUD.startedAt||Date.now()))/1000)+' 秒';
     toast('发布失败：'+CLOUD.error+'（草稿仍保留在本机）',6500);
   }finally{
     CLOUD.publishing=false;
@@ -3205,7 +3244,7 @@ function viewAdminGate(){
   if(pending)CLOUD.gateTimer=setTimeout(()=>{
     const h=$('#gate-hint');
     if(h&&CLOUD.probe==='pending'&&isAdminPath())
-      h.textContent='连接较慢，仍在与服务器握手（跨境链路偶发，最多等待 25 秒）…';
+      h.textContent='连接较慢，仍在与服务器握手（跨境链路偶发，最多等待 30 秒）…';
   },6000);
 }
 function viewAdmin(path){

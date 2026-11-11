@@ -148,6 +148,9 @@ function logout() {
 
 /* ---------------------------------------------------------------- GitHub */
 
+const GH_TIMEOUT = 25000;
+/* 写操作绝不自动重试（会重复 blob / 重复 commit）；只读失败可重试一次。
+   加显式超时，避免 GitHub 挂起时 Worker 一直挂着、前端只能干等到 abort。 */
 async function gh(path, env, opt = {}) {
   const headers = {
     'Authorization': 'Bearer ' + env.GITHUB_TOKEN,
@@ -156,14 +159,31 @@ async function gh(path, env, opt = {}) {
     'X-GitHub-Api-Version': '2022-11-28',
   };
   if (opt.body) headers['Content-Type'] = 'application/json';
-  const r = await fetch('https://api.github.com' + path, {
-    method: opt.method || 'GET', headers, body: opt.body || undefined,
-  });
-  if (!r.ok) {
-    const t = (await r.text()).slice(0, 300);
-    throw new Error('GitHub ' + r.status + '：' + t);
+  const method = opt.method || 'GET';
+  const tries = method === 'GET' ? 2 : 1;
+  let last = null;
+  for (let i = 0; i < tries; i++) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), GH_TIMEOUT);
+    try {
+      const r = await fetch('https://api.github.com' + path, {
+        method, headers, body: opt.body || undefined, signal: ctl.signal,
+      });
+      if (!r.ok) {
+        const t = (await r.text()).slice(0, 300);
+        last = new Error('GitHub ' + r.status + '：' + t);
+      } else {
+        return await r.json();
+      }
+    } catch (e) {
+      last = e;
+    } finally { clearTimeout(timer); }
+    /* 明确的 4xx（权限/参数/冲突）重试没有意义，直接抛出；5xx/限流/超时才重试 */
+    if (last && /GitHub 4\d\d/.test(String(last.message)) &&
+        !/GitHub 403|GitHub 429/.test(String(last.message))) break;
+    if (i < tries - 1) await new Promise(r => setTimeout(r, 500 * (i + 1)));
   }
-  return r.json();
+  throw last || new Error('GitHub API 连接超时');
 }
 
 async function readRepoFile(path, env) {
@@ -434,7 +454,7 @@ async function handlePost(ctx) {
   const { request, env } = ctx;
   const url = new URL(request.url);
   if (!configured(env)) return json({ error: '在线 CMS 尚未配置' }, 503);
-  if (!sameOrigin(request, url)) return json({ error: '请求来源不合法' }, 403);
+  if (!sameOrigin(request, url)) return json({ error: '请求来源不合法（403）：请始终用 https://logoicon.cn/admin 打开后台，不要混用 www、pages.dev 或镜像域名' }, 403);
 
   const len = Number(request.headers.get('Content-Length') || 0);
   if (len > MAX_BODY) return json({ error: '请求体过大' }, 413);
@@ -452,7 +472,7 @@ async function handlePost(ctx) {
   }
   if (body.action === 'logout') return logout();
 
-  if (!await authed(request, env)) return json({ error: '登录已失效，请重新登录' }, 401);
+  if (!await authed(request, env)) return json({ error: '登录已失效（401）：请重新打开 https://logoicon.cn/admin 并输入管理员密码。草稿仍在本机，不会丢失。' }, 401);
 
   if (body.action === 'save') {
     const p = publicPayload(body.db || {});
@@ -478,10 +498,10 @@ async function handlePost(ctx) {
     }
     if (oldCount >= 20 && newCount < oldCount * 0.5 && oldCount - newCount >= 20) {
       return json({
-        error: '已拦截一次疑似旧草稿覆盖：线上现有 ' + oldCount + ' 个应用，'
-             + '本次发布只剩 ' + newCount + ' 个。请先退出登录再重新登录'
-             + '（或点「放弃更改」）同步云端最新馆藏，确认后再发布；'
-             + '确实要删除请分批操作。'
+        error: '已拦截一次疑似旧草稿覆盖（409）：线上现有 ' + oldCount + ' 个应用，'
+             + '本机草稿只有 ' + newCount + ' 个。这是本机草稿过旧，不是网络问题，'
+             + '反复点发布只会一直失败。请先把云端最新馆藏同步回本机再发布；'
+             + '若确实要批量删除，请分批操作。草稿已保留，没有丢失。'
       }, 409);
     }
     /* extractImages 同时把 p 里的 dataURL 改写成站内相对路径 */
@@ -540,6 +560,19 @@ async function handlePost(ctx) {
   return json({ error: '未知操作' }, 400);
 }
 
+/* 把 GitHub / 网络的英文异常翻成管理员能直接照做的中文结论 */
+function friendlyError(e) {
+  const s = String((e && e.message) || e);
+  if (/GitHub 401/.test(s)) return 'GitHub 令牌无效或已过期（401）：请在 Cloudflare → 项目设置 → 环境变量更新 GITHUB_TOKEN（Fine-grained PAT，Contents: Read & Write），保存后重新部署一次。';
+  if (/GitHub 403|GitHub 429/.test(s)) return 'GitHub API 限流或权限不足（403/429）：请等 1 分钟再点「重试发布」，并检查 GITHUB_TOKEN 是否过期。';
+  if (/GitHub 404/.test(s)) return 'GitHub 仓库或文件读取失败（404）：请确认令牌已授权 xxxlira/logo-icon-museum，且 main 分支存在。';
+  if (/GitHub 409|GitHub 422/.test(s)) return 'GitHub 提交冲突（409/422）：可能有另一个发布正在写入，请等 10 秒后点「重试发布」，系统会自动核对，不会重复提交。';
+  if (/GitHub 5\d\d/.test(s)) return 'GitHub 服务暂时不可用（5xx）：请稍后点「重试发布」。';
+  if (/fetch failed|failed to fetch|networkerror|network error|load failed|ENOTFOUND|EAI_AGAIN/i.test(s)) return '连接 GitHub 失败（跨境链路抖动）：请直接点「重试发布」，系统会自动核对线上是否其实已写入成功。草稿仍保留在本机。';
+  if (/abort|timed out|timeout|连接超时/i.test(s)) return '连接 GitHub 超时：跨境链路抖动，请直接点「重试发布」，系统会自动核对线上是否其实已写入成功。';
+  return s;
+}
+
 export async function onRequest(ctx) {
   try {
     const m = ctx.request.method;
@@ -548,6 +581,6 @@ export async function onRequest(ctx) {
     if (m === 'DELETE') return logout();
     return json({ error: '不支持的请求方法' }, 405);
   } catch (e) {
-    return json({ error: String((e && e.message) || e) }, 500);
+    return json({ error: friendlyError(e) }, 500);
   }
 }
