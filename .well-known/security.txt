@@ -1,0 +1,6 @@
+# LOGO ICON (logoicon.cn) security disclosure · RFC 9116
+# Please report security issues only. For content / copyright, use the About page.
+Contact: mailto:yinh2024@outlook.com
+Expires: 2027-05-12T00:00:00Z
+Preferred-Languages: zh-CN, en
+Canonical: https://logoicon.cn/.well-known/security.txt
