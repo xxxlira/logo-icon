@@ -1728,13 +1728,22 @@ function imgFallback(el){
   fxStop(el);                       /* 失败后停掉动画，落到静态首字占位图 */
   el.src=el.dataset.fb||PLACEHOLDER;
 }
-/* 跨境链路偶发超时：同一 URL 退避重试 2 次，仍失败才落到首字占位图，不再出现破图 */
+/* 跨境链路偶发超时：同一 URL 退避重试 2 次，仍失败才落到首字占位图，不再出现破图。
+   第 47 轮补充：Cloudflare 会把「图片上传前被请求过的 SPA 回退 HTML」按 /thumbs/* 长缓存规则
+   缓存下来（content-type: text/html + s-maxage=86400），此时重试同一 URL 永远拿到缓存的 HTML。
+   第二次重试只对站内图片附加跟随 publishId 的版本参数绕开边缘缓存；外链签名 URL 保持原样。 */
 function imgRetry(el){
   if(el.dataset.fbDone)return;
   const src=el.getAttribute('src')||'';
   if(!src||src.startsWith('data:')||src.startsWith('blob:')){imgFallback(el);return}
   const n=Number(el.dataset.try||0);
-  if(n<2){el.dataset.try=String(n+1);setTimeout(()=>{if(el.isConnected&&!el.dataset.fbDone)el.src=src},700*(n+1));return}
+  if(n<2){
+    el.dataset.try=String(n+1);
+    const ver=(()=>{try{return String(DB.publishId||DB.generatedAt||'1').replace(/[^0-9A-Za-z_-]/g,'')||'1'}catch(e){return '1'}})();
+    const bust=(n===1&&/\/(icons|thumbs|related)\//.test(src)&&src.indexOf('?')<0)?src+'?v='+ver:src;
+    setTimeout(()=>{if(el.isConnected&&!el.dataset.fbDone)el.src=bust},700*(n+1));
+    return
+  }
   imgFallback(el);
 }
 /* 外链图片看门狗：加载失败或长时间挂起时统一回退，避免出现破图/空白格 */
