@@ -1982,9 +1982,10 @@ function applyFilters(list,p){
   if(p.get('style')){const s=p.get('style');out=out.filter(i=>s==='__none__'?!i.styleSlugs.length:i.styleSlugs.includes(s))}
   return out;
 }
-/* ---------- 第 48 轮 · 自由探索（随机摆放） ----------
-   默认按馆藏时间序；点击首页标题下「自由探索」切换为随机序。
-   seed 化洗牌保证站内导航 / 筛选 / resize 顺序稳定，整页刷新才换一批。 */
+/* ---------- 第 48 轮 · 自由探索 / 第 53 轮 · 每点一次换一批 ----------
+   默认按馆藏时间序；每点击一次首页标题下「自由探索」都生成新 seed 重新洗牌，
+   不再二次点击退回时间序。seed 化洗牌保证站内导航 / 筛选 / resize 顺序稳定，
+   整页刷新同样换一批。若需回到按时间排序，点击导航栏「当日更新」徽标。 */
 const EXPLORE_KEY='iconmuseum_explore',EXPLORE_SEED_KEY='iconmuseum_explore_seed';
 const EXPLORE=(()=>{
   let on=false,seed=0;
@@ -1995,7 +1996,9 @@ const EXPLORE=(()=>{
   return {
     get on(){return on},get seed(){return seed},
     set(v){on=!!v;if(on)seed=fresh();
-      try{localStorage.setItem(EXPLORE_KEY,on?'1':'0');localStorage.setItem(EXPLORE_SEED_KEY,String(seed))}catch(e){}}
+      try{localStorage.setItem(EXPLORE_KEY,on?'1':'0');localStorage.setItem(EXPLORE_SEED_KEY,String(seed))}catch(e){}},
+    reshuffle(){on=true;seed=fresh();
+      try{localStorage.setItem(EXPLORE_KEY,'1');localStorage.setItem(EXPLORE_SEED_KEY,String(seed))}catch(e){}}
   };
 })();
 function seededShuffle(list,seed){
@@ -3681,7 +3684,7 @@ document.addEventListener('click',e=>{
       go('/?'+p.toString());
       break}
     case 'explore':{
-      EXPLORE.set(!EXPLORE.on);
+      EXPLORE.reshuffle(); /* 第 53 轮：每次点击都换一批，不再二次点击退回时间序 */
       if(route().path!=='/'){go('/');break}
       const g=$('#grid');
       if(g){const y=window.scrollY;g.innerHTML=gridHTML(orderedIcons(route().p));observeImages();window.scrollTo(0,y)}
