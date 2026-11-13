@@ -1740,10 +1740,13 @@ function imgRetry(el){
   const src=el.getAttribute('src')||'';
   if(!src||src.startsWith('data:')||src.startsWith('blob:')){imgFallback(el);return}
   const n=Number(el.dataset.try||0);
-  if(n<2){
+  if(n<3){
     el.dataset.try=String(n+1);
     const ver=(()=>{try{return String(DB.publishId||DB.generatedAt||'1').replace(/[^0-9A-Za-z_-]/g,'')||'1'}catch(e){return '1'}})();
-    const bust=(n===1&&/\/(icons|thumbs|related)\//.test(src)&&src.indexOf('?')<0)?src+'?v='+ver:src;
+    /* 第 49 轮：站内路径可能是 "thumbs/x.webp"（相对）或 "/thumbs/x.webp"，
+       每次失败都换缓存键，绕开被 CDN 缓存成 text/html 的 SPA 回退页；外链保持原样。 */
+    const site=/(^|\/)(icons|thumbs|related)\//.test(src);
+    const bust=site?src+(src.indexOf('?')<0?'?':'&')+(n===0?'v='+ver:'r='+n+'-'+ver):src;
     setTimeout(()=>{if(el.isConnected&&!el.dataset.fbDone)el.src=bust},700*(n+1));
     return
   }
