@@ -88,6 +88,11 @@ header.nav{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);bac
 .hero-sub{margin:16px auto 0;max-width:620px;font-size:14px;line-height:1.6;color:#8a8a87;font-weight:600}
 .hero-sub span{display:block}
 .hero-sub .line2{margin-top:3px;font-size:15px;color:#6f6f6c;letter-spacing:.06em}
+/* 第 48 轮 · 首页「自由探索」：点击后随机摆放全部图标，文案与译文沿用原词条 */
+.hero-sub .line2.explore-btn{display:block;margin:3px auto 0;padding:1px 10px;background:transparent;border:0;border-radius:99px;font-size:15px;letter-spacing:.06em;color:#6f6f6c;line-height:1.6;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:4px;transition:color .15s,background .15s}
+.hero-sub .line2.explore-btn:hover{color:var(--fg)}
+.hero-sub .line2.explore-btn.on{background:var(--secondary);color:var(--success);text-decoration:none;font-weight:700}
+.hero-sub .line2.explore-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .hero-sub b{color:var(--fg);font-variant-numeric:tabular-nums}
 
 /* ---------- filter bar ---------- */
@@ -1952,6 +1957,33 @@ function applyFilters(list,p){
   if(p.get('style')){const s=p.get('style');out=out.filter(i=>s==='__none__'?!i.styleSlugs.length:i.styleSlugs.includes(s))}
   return out;
 }
+/* ---------- 第 48 轮 · 自由探索（随机摆放） ----------
+   默认按馆藏时间序；点击首页标题下「自由探索」切换为随机序。
+   seed 化洗牌保证站内导航 / 筛选 / resize 顺序稳定，整页刷新才换一批。 */
+const EXPLORE_KEY='iconmuseum_explore',EXPLORE_SEED_KEY='iconmuseum_explore_seed';
+const EXPLORE=(()=>{
+  let on=false,seed=0;
+  const fresh=()=>((Date.now()^(Math.random()*0xffffffff))>>>0)||1;
+  try{on=localStorage.getItem(EXPLORE_KEY)==='1'}catch(e){}
+  if(on){seed=fresh();try{localStorage.setItem(EXPLORE_SEED_KEY,String(seed))}catch(e){}}
+  else{try{seed=(+localStorage.getItem(EXPLORE_SEED_KEY))>>>0}catch(e){}}
+  return {
+    get on(){return on},get seed(){return seed},
+    set(v){on=!!v;if(on)seed=fresh();
+      try{localStorage.setItem(EXPLORE_KEY,on?'1':'0');localStorage.setItem(EXPLORE_SEED_KEY,String(seed))}catch(e){}}
+  };
+})();
+function seededShuffle(list,seed){
+  const a=list.slice();let s=seed>>>0||1;
+  const rnd=()=>{s=(s+0x6D2B79F5)>>>0;let t=Math.imul(s^(s>>>15),1|s);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t;return ((t^(t>>>14))>>>0)/4294967296};
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));const x=a[i];a[i]=a[j];a[j]=x}
+  return a;
+}
+function orderedIcons(p){
+  const list=applyFilters(browseIcons(),p);
+  return EXPLORE.on?seededShuffle(list,EXPLORE.seed):list;
+}
 function route(){const raw=routeRaw();const [path,qs]=raw.split('?');return {path:path||'/',p:new URLSearchParams(qs||'')}}
 function go(to){
   to=to||'/';
@@ -1979,7 +2011,7 @@ function heroHTML(){
   const iconCount=DB.apps.reduce((n,a)=>n+a.icons.length,0);
   return `<section class="hero">
     <h1>${bi('heroTitle')}</h1>
-    <p class="hero-sub"><span class="line1">收录 <b>${DB.apps.length}</b> 个应用 · <b>${iconCount}</b> 枚图标</span><span class="line2">自由探索</span></p>
+    <p class="hero-sub"><span class="line1">收录 <b>${DB.apps.length}</b> 个应用 · <b>${iconCount}</b> 枚图标</span><button type="button" class="line2 explore-btn ${EXPLORE.on?'on':''}" data-act="explore" aria-pressed="${EXPLORE.on}">自由探索</button></p>
   </section>`;
 }
 /* ---------- home filter: level 1 dimensions + level 2 options ---------- */
@@ -2042,7 +2074,7 @@ function gridHTML(icons){
 }
 function columns(){const w=window.innerWidth;return w>=1024?8:w>=768?6:w>=640?4:3}
 function viewHome(){
-  const p=route().p,icons=applyFilters(browseIcons(),p);
+  const p=route().p,icons=orderedIcons(p);
   $('#view').innerHTML=heroHTML()+filterNav(p)+`<div id="grid" class="wall-grid">${gridHTML(icons)}</div>`;
 }
 /* ---------- app detail ---------- */
@@ -3592,6 +3624,14 @@ document.addEventListener('click',e=>{
   switch(a){
     case 'langtoggle':{const m=$('#lang-menu');if(m){m.hidden=!m.hidden;el.setAttribute('aria-expanded',m.hidden?'false':'true')}break}
     case 'langset':{I18N.set(el.dataset.v);const m=$('#lang-menu');if(m)m.hidden=true;break}
+    case 'explore':{
+      EXPLORE.set(!EXPLORE.on);
+      if(route().path!=='/'){go('/');break}
+      const g=$('#grid');
+      if(g){const y=window.scrollY;g.innerHTML=gridHTML(orderedIcons(route().p));observeImages();window.scrollTo(0,y)}
+      const b=$('.explore-btn');
+      if(b){b.classList.toggle('on',EXPLORE.on);b.setAttribute('aria-pressed',String(EXPLORE.on))}
+      break}
     case 'copyhex':copy(el.dataset.c);break;
     case 'downloadicon':{const ic=currentDetailIcon();downloadIcon(el.dataset.u,el.dataset.n||'图标',ic?.hdUrl);break}
     case 'suggestdesigner':suggestDesignerModal(el.dataset.slug);break;
@@ -3925,7 +3965,7 @@ document.addEventListener('keydown',e=>{
   }
 });
 if(FILE_MODE)window.addEventListener('hashchange',render);else window.addEventListener('popstate',render);
-let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().path==='/'){const g=$('#grid');if(g)g.innerHTML=gridHTML(applyFilters(browseIcons(),route().p))}},180)});
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().path==='/'){const g=$('#grid');if(g)g.innerHTML=gridHTML(orderedIcons(route().p))}},180)});
 
 /* ---------- boot ---------- */
 applySecurity();render();
