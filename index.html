@@ -2326,7 +2326,7 @@ function viewWall(){
       <div class="wall-vignette"></div><div class="wall-fade top"></div><div class="wall-fade bottom"></div>
     </div>
     <div class="wall-hud"><button data-act="zoomout">−</button><span id="zoomlabel">100%</span><button data-act="zoomin">＋</button>
-      <button data-act="wallreset" title="${esc(t('reset'))}">⌖</button><span class="muted tiny" style="margin-left:6px">${esc(t('wallHint'))}</span></div>`;
+      <button data-act="wallreset" title="${esc(t('reset'))}">⌖</button></div>`;
   const c=$('#wallcanvas'),layer=$('#walllayer');
   const TILE=88,STEP=132,MIN=.5,MAX=1.75,DECAY=.92,IDLE=2500,DRIFT=2000;
   const cols=Math.max(1,Math.ceil(Math.sqrt(icons.length*1.5)));
