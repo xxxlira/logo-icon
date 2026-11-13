@@ -88,11 +88,13 @@ header.nav{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);bac
 .hero-sub{margin:16px auto 0;max-width:620px;font-size:14px;line-height:1.6;color:#8a8a87;font-weight:600}
 .hero-sub span{display:block}
 .hero-sub .line2{margin-top:3px;font-size:15px;color:#6f6f6c;letter-spacing:.06em}
-/* 第 48 轮 · 首页「自由探索」：点击后随机摆放全部图标，文案与译文沿用原词条 */
-.hero-sub .line2.explore-btn{display:block;margin:3px auto 0;padding:1px 10px;background:transparent;border:0;border-radius:99px;font-size:15px;letter-spacing:.06em;color:#6f6f6c;line-height:1.6;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:4px;transition:color .15s,background .15s}
-.hero-sub .line2.explore-btn:hover{color:var(--fg)}
-.hero-sub .line2.explore-btn.on{background:var(--secondary);color:var(--success);text-decoration:none;font-weight:700}
+/* 第 48 轮 · 首页「自由探索」：点击后随机摆放全部图标，文案与译文沿用原词条
+   视觉约定：默认态与激活态完全一致（无背景色、无下划线），仅按下时抖一下 */
+.hero-sub .line2.explore-btn{display:block;margin:3px auto 0;padding:1px 10px;background:transparent;border:0;border-radius:99px;font-size:15px;letter-spacing:.06em;color:#6f6f6c;line-height:1.6}
 .hero-sub .line2.explore-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hero-sub .line2.explore-btn.tap,.hero-sub .line2.explore-btn:active{animation:explore-shake .32s ease-in-out}
+@keyframes explore-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-3px)}40%{transform:translateX(3px)}60%{transform:translateX(-2px)}80%{transform:translateX(2px)}}
+@media(prefers-reduced-motion:reduce){.hero-sub .line2.explore-btn.tap,.hero-sub .line2.explore-btn:active{animation:none}}
 .hero-sub b{color:var(--fg);font-variant-numeric:tabular-nums}
 
 /* ---------- filter bar ---------- */
@@ -3630,7 +3632,9 @@ document.addEventListener('click',e=>{
       const g=$('#grid');
       if(g){const y=window.scrollY;g.innerHTML=gridHTML(orderedIcons(route().p));observeImages();window.scrollTo(0,y)}
       const b=$('.explore-btn');
-      if(b){b.classList.toggle('on',EXPLORE.on);b.setAttribute('aria-pressed',String(EXPLORE.on))}
+      if(b){b.classList.toggle('on',EXPLORE.on);b.setAttribute('aria-pressed',String(EXPLORE.on));
+        b.classList.remove('tap');void b.offsetWidth;b.classList.add('tap');
+        setTimeout(()=>b.classList.remove('tap'),360)}
       break}
     case 'copyhex':copy(el.dataset.c);break;
     case 'downloadicon':{const ic=currentDetailIcon();downloadIcon(el.dataset.u,el.dataset.n||'图标',ic?.hdUrl);break}
