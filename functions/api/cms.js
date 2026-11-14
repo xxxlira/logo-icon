@@ -55,6 +55,17 @@ const GH = 'https://api.github.com/repos/' + REPO;
 const SNAP_RE = /(<script id="site-db"[^>]*>)[\s\S]*?(<\/script>)/;
 const SAFE_NAME = /^[a-z0-9][a-z0-9-]{0,80}\.(webp|png|jpg|jpeg)$/i;
 
+/* ---- 访客投稿 ------------------------------------------------------------
+ * 投稿存仓库 data/submissions.json（一个 JSON 数组），复用现有 GitHub 链路
+ * 读写，不需要 Cloudflare KV/D1 绑定，也不需要改动任何部署配置。
+ * 不写入 manifest.json / #site-db，访客端不会加载；内容仅含待公开的产品信息。
+ * 每次写入带 [CI Skip]，避免一条投稿触发一次 Pages 构建。 */
+const SUB_PATH = 'data/submissions.json';
+const SUB_MAX_BODY = 1600000;      /* 单条投稿（含压缩后 logo）请求体上限 */
+const SUB_MAX_PENDING = 120;       /* 待审核堆积上限，防匿名刷提交 */
+const SUB_MAX_RECORDS = 300;       /* 记录总数上限 */
+const SUB_RATE = new Map();        /* 轻量限流：单 IP 每分钟 3 条 */
+
 function json(obj, status = 200, extra = {}) {
   return new Response(JSON.stringify(obj), {
     status,
@@ -421,6 +432,67 @@ async function atomicCommit(items, env, message) {
   return commit.sha;
 }
 
+/* ------------------------------------------------------------ 访客投稿 */
+
+function subStr(v, max) {
+  return (typeof v === 'string' ? v.trim() : '').slice(0, max);
+}
+function subUrl(v) {
+  const s = subStr(v, 500);
+  if (!s) return '';
+  try {
+    const u = new URL(s);
+    return (u.protocol === 'https:' || u.protocol === 'http:') ? u.toString().slice(0, 500) : '';
+  } catch (e) { return ''; }
+}
+/* 只接受前端 canvas 压缩后的位图 dataURL；拒绝 svg（可含脚本）与任意外链 */
+function subLogo(v) {
+  const s = typeof v === 'string' ? v : '';
+  if (!/^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(s)) return '';
+  return s.length <= 900000 ? s : '';
+}
+function subRateLimited(request) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  const hits = (SUB_RATE.get(ip) || []).filter(t => now - t < 60000);
+  if (hits.length >= 3) { SUB_RATE.set(ip, hits); return true; }
+  hits.push(now); SUB_RATE.set(ip, hits);
+  if (SUB_RATE.size > 2000) for (const [k, arr] of SUB_RATE)
+    if (!arr.length || now - arr[arr.length - 1] > 60000) SUB_RATE.delete(k);
+  return false;
+}
+async function readSubmissions(env) {
+  try {
+    const d = JSON.parse(await readRepoFile(SUB_PATH, env));
+    return Array.isArray(d) ? d : [];
+  } catch (e) { return []; }   /* 首次投稿时文件还不存在 */
+}
+/* 读 → 改 → 写 整体重试：两个投稿并发时后者会 ref 冲突，重读后合并再写。
+   atomicCommit 每次都重新取 main 的 ref，所以重试是安全的。 */
+async function mutateSubmissions(env, message, fn) {
+  let last = null;
+  for (let i = 0; i < 3; i++) {
+    const cur = await readSubmissions(env);
+    const res = fn(cur);
+    if (res && res.error) return { ok: false, error: res.error, list: cur };
+    const list = (res && res.list) || (Array.isArray(res) ? res : cur);
+    try {
+      await atomicCommit([{ path: SUB_PATH, base64: utf8ToB64(JSON.stringify(list)) }],
+        env, '[CI Skip] ' + message);
+      return { ok: true, list };
+    } catch (e) {
+      last = e;
+      if (!/GitHub (409|422)/.test(String(e && e.message))) throw e;
+      await new Promise(r => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  throw last || new Error('投稿写入冲突，请稍后重试');
+}
+function subId() {
+  try { return crypto.randomUUID(); }
+  catch (e) { return 'sub-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); }
+}
+
 /* ---------------------------------------------------------------- 路由 */
 
 async function handleGet(ctx) {
@@ -447,6 +519,12 @@ async function handleGet(ctx) {
         apps: Array.isArray(m.apps) ? m.apps.length : 0 });
     } catch (e) { return json({ published: false, reason: '线上清单暂不可读' }); }
   }
+  /* 管理员读取投稿列表（匿名不可读） */
+  if (action === 'submissions') {
+    if (!await authed(request, env)) return json({ error: '登录已失效（401）' }, 401);
+    try { return json({ ok: true, submissions: await readSubmissions(env) }); }
+    catch (e) { return json({ error: '投稿列表读取失败' }, 500); }
+  }
   return json({ error: '未知操作' }, 400);
 }
 
@@ -472,7 +550,78 @@ async function handlePost(ctx) {
   }
   if (body.action === 'logout') return logout();
 
+  /* 访客投稿：匿名，必须放在 authed() 闸门之前 */
+  if (body.action === 'submit') {
+    if (text.length > SUB_MAX_BODY) return json({ error: '投稿内容过大，请换一张小一点的 Logo 图片' }, 413);
+    if (subStr(body._hp, 50)) return json({ ok: true, id: '' });   /* 蜜罐：机器人填了就假装成功 */
+    const kind = body.kind === 'unlisted' ? 'unlisted' : 'listed';
+    const rec = {
+      id: subId(), kind,
+      storeUrl: subUrl(body.storeUrl),
+      name: subStr(body.name, 80),
+      author: subStr(body.author, 80),
+      note: subStr(body.note, 500),
+      contact: subStr(body.contact, 120),
+      logo: subLogo(body.logo),
+      logoHd: subLogo(body.logoHd),
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      reviewedAt: null,
+    };
+    if (kind === 'listed' && !rec.storeUrl)
+      return json({ error: '请填写有效的应用市场链接（https://…）' }, 400);
+    if (kind === 'unlisted' && (!rec.name || !rec.author || !rec.logo))
+      return json({ error: '请填写产品名称、作者并上传 Logo 图片' }, 400);
+    /* 限流放在字段校验之后：填错被拒的正常用户不应消耗额度 */
+    if (subRateLimited(request)) return json({ error: '提交太频繁，请稍后再试' }, 429);
+    const key = kind === 'listed' ? rec.storeUrl : (rec.name + '|' + rec.author).toLowerCase();
+    let out;
+    try {
+      out = await mutateSubmissions(env, '访客投稿：' + (rec.name || rec.storeUrl).slice(0, 40), cur => {
+        const pending = cur.filter(x => x.status === 'pending');
+        if (pending.length >= SUB_MAX_PENDING) return { error: '投稿队列已满，请稍后再试' };
+        const dup = pending.some(x => {
+          const k = x.kind === 'listed' ? x.storeUrl : ((x.name || '') + '|' + (x.author || '')).toLowerCase();
+          return k && k === key;
+        });
+        if (dup) return { error: '这条投稿已在待审核队列中，请勿重复提交' };
+        return [rec, ...cur].slice(0, SUB_MAX_RECORDS);
+      });
+    } catch (e) { return json({ error: friendlyError(e) }, 500); }
+    if (!out.ok) return json({ error: out.error }, 429);
+    return json({ ok: true, id: rec.id });
+  }
+
   if (!await authed(request, env)) return json({ error: '登录已失效（401）：请重新打开 https://logoicon.cn/admin 并输入管理员密码。草稿仍在本机，不会丢失。' }, 401);
+
+  /* 管理员审核投稿 */
+  if (body.action === 'moderate') {
+    const id = subStr(body.id, 80), status = subStr(body.status, 20);
+    if (!id || !['approved', 'rejected', 'pending', 'deleted'].includes(status))
+      return json({ error: '审核参数不正确' }, 400);
+    let out;
+    try {
+      out = await mutateSubmissions(env, '审核投稿：' + status + ' ' + id.slice(0, 12), cur => {
+        const i = cur.findIndex(x => x.id === id);
+        if (i < 0) return { error: '找不到这条投稿，可能已被处理' };
+        const next = cur.slice();
+        if (status === 'deleted') next.splice(i, 1);
+        else {
+          next[i] = Object.assign({}, next[i], { status, reviewedAt: new Date().toISOString() });
+          /* 审核后释放图片与联系信息，既避免 submissions.json 膨胀，
+             也降低旧记录被静态托管时泄露投稿者隐私的风险。
+             前端「通过并收录」时已把图片写进本机应用草稿。 */
+          if (status === 'approved' || status === 'rejected') {
+            delete next[i].logo; delete next[i].logoHd;
+            delete next[i].contact; delete next[i].note;
+          }
+        }
+        return next;
+      });
+    } catch (e) { return json({ error: friendlyError(e) }, 500); }
+    if (!out.ok) return json({ error: out.error }, 400);
+    return json({ ok: true, submissions: out.list });
+  }
 
   if (body.action === 'save') {
     const saveT0 = Date.now();   /* 第 45 轮：把服务端耗时回传，便于区分链路慢 / GitHub 慢 */
