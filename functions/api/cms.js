@@ -6,8 +6,8 @@
  *   - 管理员登录 → HttpOnly 签名 Cookie（HMAC-SHA256，密钥由 ADMIN_PASSWORD 派生）
  *   - 保存     → 把整份馆藏拆成 manifest.json / index.html 内嵌快照 / 图标文件
  *               → 用 GitHub Git Data API 一次原子提交到 main
- *               → 纯文字改动在提交信息加 [CI Skip] 跳过 Pages 构建；
- *                 含新图片时才触发一次构建，把文件铺到 CDN（1-2 分钟）
+ *               → 第 57 轮起每次保存都触发一次 Pages 构建（中间图片批次除外），
+ *                 保证线上页面 / 清单 / AI 索引三者永远同版
  *   - 暂存发布 → 前端后台改动只写本机草稿，点「发布到线上」才调用一次保存，
  *               避免每改一处就消耗一次构建额度
  *   - 即时生效 → 前端改从 /api/cms?action=manifest 读 GitHub 上的最新清单，
@@ -340,7 +340,155 @@ function extractImages(p) {
   return { files, mapped };
 }
 
+
+/* ---- 第 57 轮 · 数据规范化 / AI 索引 ----------------------------------
+ * 与本地 apply_r57_data.py 完全同一套算法，保证 CMS 发布与手工构建结果一致。
+ * - 风格表：name == zh，保留「拟人」(skeuomorphic) 与「拟物」(glass)，
+ *   three-d 合并进 3d；旧链接 ?style=three-d 由前端 applyFilters 兜底。
+ * - 配色：按站点 colorFamily() 的色相族分组，每枚图标压到 3-5 色，
+ *   减少颜色筛选的误命中（8 色里常混入无关色相族）。
+ * - 每次发布同时写 icons.json，索引 version = publishId。
+ * ---------------------------------------------------------------------- */
+const STYLE_FIX = { flat: '扁平', gradient: '渐变', minimal: '极简',
+  skeuomorphic: '拟人', glass: '拟物', '3d': '3D', 'style-mwa1j4ggya0': '手绘' };
+const STYLE_MERGE = { 'three-d': '3d' };
+const STYLE_ALIASES = {
+  '拟人': ['skeuomorphic'], '拟人化': ['skeuomorphic'], '卡通角色': ['skeuomorphic'],
+  '拟物': ['glass'], '玻璃质感': ['glass'], '玻璃': ['glass'],
+  '黑白': ['@monochrome'], '单色': ['@monochrome'], '无彩色': ['@monochrome'],
+  'monochrome': ['@monochrome'], '黑白配色': ['@monochrome'],
+  '扁平': ['flat'], '极简': ['minimal'], '渐变': ['gradient'],
+  '3D': ['3d'], '立体': ['3d'], '手绘': ['style-mwa1j4ggya0'], '像素': ['3d']
+};
+const PALETTE_CAP = 5;
+
+/* 与前端 colorFamily() 逐字一致 */
+function colorFamily(hex) {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2 / 255;
+  if (d < 18) return l < .18 ? 'black' : l < .35 ? 'dark gray' : l < .55 ? 'gray' : l < .8 ? 'light gray' : 'white';
+  let h = 0;
+  if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+  h *= 60; if (h < 0) h += 360;
+  if (h < 15 || h >= 345) return 'red';
+  if (h < 45) return 'orange';
+  if (h < 70) return 'yellow';
+  if (h < 160) return 'green';
+  if (h < 200) return 'teal';
+  if (h < 255) return 'blue';
+  if (h < 290) return 'purple';
+  return 'pink';
+}
+function palValue(h) {
+  return Math.max(parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)) / 255;
+}
+function compactPalette(pal, cap = PALETTE_CAP) {
+  if (!Array.isArray(pal)) return [];
+  const uniq = [], seen = new Set();
+  for (const c of pal) {
+    if (typeof c !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(c)) continue;
+    const x = c.toLowerCase();
+    if (!seen.has(x)) { seen.add(x); uniq.push(x); }
+  }
+  if (uniq.length <= cap) return uniq;
+  const groups = new Map();
+  for (const c of uniq) {
+    const f = colorFamily(c);
+    if (!groups.has(f)) groups.set(f, []);
+    groups.get(f).push(c);
+  }
+  const order = new Map(uniq.map((c, i) => [c, i]));
+  const ranked = [...groups.entries()].sort((a, b) =>
+    (b[1].length - a[1].length) || (order.get(a[1][0]) - order.get(b[1][0])));
+  let picked;
+  if (groups.size > cap) {
+    picked = ranked.slice(0, cap).map(e => e[1][0]);
+  } else {
+    picked = ranked.map(e => e[1][0]);
+    for (const [, cs] of ranked) {
+      if (picked.length >= cap) break;
+      let reps;
+      if (cs.length <= 2) reps = cs;
+      else { const byV = [...cs].sort((x, y) => palValue(x) - palValue(y)); reps = [byV[0], byV[byV.length - 1]]; }
+      for (const c of reps) if (!picked.includes(c) && picked.length < cap) picked.push(c);
+    }
+  }
+  const keep = new Set(picked);
+  return uniq.filter(c => keep.has(c));
+}
+function paletteFeatures(pal) {
+  const vals = (pal || []).filter(c => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c)).map(c => {
+    const r = parseInt(c.slice(1, 3), 16) / 255, g = parseInt(c.slice(3, 5), 16) / 255, b = parseInt(c.slice(5, 7), 16) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    return { s: mx === 0 ? 0 : d / mx, v: mx };
+  });
+  if (!vals.length) return { monochrome: false, neutral_ratio: 0, dominant: '' };
+  const nr = vals.filter(x => x.s < 0.15).length / vals.length;
+  return {
+    monochrome: nr >= 0.75 && vals.some(x => x.v > 0.75) && vals.some(x => x.v < 0.30),
+    neutral_ratio: Math.round(nr * 100) / 100,
+    dominant: (pal && pal[0]) || ''
+  };
+}
+function normalizePayload(p) {
+  const styles = Array.isArray(p.styles) ? p.styles
+    .filter(s => s && !STYLE_MERGE[s.slug])
+    .map(s => {
+      const want = STYLE_FIX[s.slug];
+      return (want && (s.name !== want || s.zh !== want)) ? { ...s, name: want, zh: want } : s;
+    }) : p.styles;
+  const apps = (Array.isArray(p.apps) ? p.apps : []).map(a => {
+    if (!a || !Array.isArray(a.icons)) return a;
+    const icons = a.icons.map(ic => {
+      const pal = compactPalette(Array.isArray(ic.palette) ? ic.palette : []);
+      const raw = Array.isArray(ic.styles) ? ic.styles : (ic.style ? [ic.style] : []);
+      const sl = [...new Set(raw.map(x => STYLE_MERGE[x] || x).filter(x => typeof x === 'string' && x))];
+      const style = sl[0] || null;
+      return { ...ic, palette: pal, styles: sl, style };
+    });
+    return { ...a, icons };
+  });
+  return { ...p, styles, apps };
+}
+function absUrl(rel) {
+  if (!rel) return '';
+  if (/^https?:\/\//.test(rel)) return rel;
+  return 'https://logoicon.cn/' + String(rel).replace(/^\.\//, '');
+}
+function buildIconsIndex(p) {
+  p = normalizePayload(p);
+  const labels = {};
+  (p.styles || []).forEach(s => { if (s && s.slug) labels[s.slug] = s.zh || s.name || s.slug; });
+  const icons = [];
+  for (const a of p.apps || []) {
+    const app = a.app || {}, slug = app.slug || '';
+    const cats = (app.categories || []).map(c => c && (c.name || c.zh)).filter(Boolean);
+    for (const ic of a.icons || []) {
+      const pal = ic.palette || [], f = paletteFeatures(pal);
+      const sl = (ic.styles || []).filter(x => typeof x === 'string');
+      icons.push({
+        id: ic.id || '', app: app.name || '', slug,
+        url: 'https://logoicon.cn/apps/' + slug,
+        thumb: absUrl(ic.url), hd: absUrl(ic.hdUrl),
+        categories: cats, styles: sl, styleLabels: sl.map(x => labels[x] || x),
+        palette: pal, monochrome: f.monochrome, neutral_ratio: f.neutral_ratio,
+        dominant: f.dominant, designer: (ic.designer && ic.designer.name) || '',
+        platform: ic.platform || '', date: ic.date || '', updatedAt: a.updatedAt || ''
+      });
+    }
+  }
+  return {
+    site: 'logoicon.cn', version: p.publishId || '', generatedAt: p.generatedAt || '',
+    appCount: (p.apps || []).length, iconCount: icons.length,
+    palettePolicy: '3-5 colors per icon, grouped by colorFamily',
+    styleAliases: STYLE_ALIASES,
+    styles: (p.styles || []).map(s => ({ slug: s.slug, name: s.name, zh: s.zh })),
+    icons
+  };
+}
+
 function buildManifest(p) {
+  p = normalizePayload(p);
   const m = {
     generatedAt: p.generatedAt,
     apps: p.apps,
@@ -360,6 +508,7 @@ function buildManifest(p) {
 }
 
 async function buildIndexHTML(p, env) {
+  p = normalizePayload(p);
   const html = await readRepoFile('index.html', env);
   if (!SNAP_RE.test(html)) throw new Error('index.html 里找不到 #site-db 快照节点');
   const snapshot = JSON.stringify({
@@ -694,13 +843,13 @@ async function handlePost(ctx) {
     const items = (remaining > BATCH_SIZE ? [] : images).concat(removals).concat([
       { path: 'manifest.json', base64: utf8ToB64(JSON.stringify(buildManifest(p))) },
       { path: 'index.html', base64: utf8ToB64(await buildIndexHTML(p, env)) },
+      { path: 'icons.json', base64: utf8ToB64(JSON.stringify(buildIconsIndex(p))) },
     ]);
-    /* 纯文字改动跳过构建；含新图片或删除应用时正常构建一次（前面各批都 [CI Skip]） */
-    /* 增量模式下前面批次都用 [CI Skip] 提交，最后一批必须触发一次构建，
-       否则新图片文件不会出现在 Cloudflare CDN 上（会 404）。 */
-    const skippedBuild = remaining === 0 && removals.length === 0 && offset === 0;
-    const message = (skippedBuild ? '[CI Skip] ' : '')
-      + '站内编辑：' + p.apps.length + ' 个应用 · ' + new Date().toISOString();
+    /* 第 57 轮 R02：纯文字保存不再加 [CI Skip]。
+       Cloudflare Pages 会 omit that deployment，导致线上 HTML 落后仓库一次编辑；
+       用户已确认接受因此增加的构建次数。中间图片批次仍用 [CI Skip]。 */
+    const skippedBuild = false;
+    const message = '站内编辑：' + p.apps.length + ' 个应用 · ' + new Date().toISOString();
     const sha = await atomicCommit(items, env, message);
     const c = cacheObj();
     if (c) { try { await c.delete(cacheKey(url)); } catch (e) { /* ignore */ } }

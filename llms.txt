@@ -1,0 +1,33 @@
+# APP LOGO 图标收藏馆 / Logo Icon Museum
+
+> 收录 343 个应用、347 枚 App 图标的中文设计参考库。每枚图标含 3-5 个代表性配色、风格、分类、设计师、平台与高清图 URL。
+> 数据版本以 /icons.json 的 version 字段为准（= publishId）。图片 URL 为绝对 HTTPS 地址，可直接展示。
+
+检索规则：自然语言条件先查 styleAliases；「黑白 / 单色 / monochrome」对应 icons.json 中 monochrome=true（83 枚）；风格用 styles 里的 slug 精确过滤。所有条件可组合。
+
+## 数据文件
+
+- [/icons.json](https://logoicon.cn/icons.json): 全量结构化索引，字段含 palette / styles / monochrome / thumb / hd
+- [/openapi.json](https://logoicon.cn/openapi.json): REST 检索接口描述
+- [/api/search](https://logoicon.cn/api/search?q=黑白配色): 只读检索，支持 q / style / monochrome / category / limit
+- [/sitemap.xml](https://logoicon.cn/sitemap.xml): 站点入口；全部详情页 URL 见 /icons.json 每条的 url 字段
+
+## 可选风格
+
+- [/?style=flat](https://logoicon.cn/?style=flat): 扁平（113 枚）
+- [/?style=gradient](https://logoicon.cn/?style=gradient): 渐变（55 枚）
+- [/?style=minimal](https://logoicon.cn/?style=minimal): 极简（70 枚）
+- [/?style=skeuomorphic](https://logoicon.cn/?style=skeuomorphic): 拟人（59 枚）
+- [/?style=glass](https://logoicon.cn/?style=glass): 拟物（35 枚）
+- [/?style=3d](https://logoicon.cn/?style=3d): 3D（20 枚）
+- [/?style=style-mwa1j4ggya0](https://logoicon.cn/?style=style-mwa1j4ggya0): 手绘（14 枚）
+
+## 可选配色
+
+- 黑白 / 单色：icons.json 中 monochrome=true（83 枚）
+- 色系筛选：/?color=black|gray|white|red|orange|yellow|green|teal|blue|purple|pink
+
+## Optional
+
+- [/about](https://logoicon.cn/about): 关于本站
+- [/.well-known/security.txt](https://logoicon.cn/.well-known/security.txt): 安全反馈

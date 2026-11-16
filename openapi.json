@@ -1,0 +1,102 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Logo Icon Museum Search API",
+    "version": "1.0.0",
+    "description": "只读检索 logoicon.cn 的 App 图标。自然语言词会经 styleAliases 映射；黑白配色用 monochrome。"
+  },
+  "servers": [
+    {
+      "url": "https://logoicon.cn"
+    }
+  ],
+  "paths": {
+    "/api/search": {
+      "get": {
+        "operationId": "searchIcons",
+        "summary": "按关键词、风格、配色、分类搜索图标",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "自然语言或应用名，如「黑白配色」「拟人风格」「Cubox」",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "style",
+            "in": "query",
+            "description": "风格 slug，如 skeuomorphic / glass / flat",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "monochrome",
+            "in": "query",
+            "description": "1 表示只要黑白/单色图标",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "分类中文名，如「效率工具」",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "结构化结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
