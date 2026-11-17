@@ -2058,7 +2058,20 @@ function go(to){
   to=to||'/';
   if(FILE_MODE){if(location.hash==='#'+to)render();else location.hash='#'+to;return}
   if(routeRaw()===to){render();return}
-  try{history.pushState(null,'',to)}catch(e){location.href=to;return}
+  try{history.pushState({d:stateDepth()+1},'',to)}catch(e){location.href=to;return}
+  render();
+}
+/* 第 58 轮 · 返回上一步 ----------------------------------------------------
+ * 站内历史深度：每条由 go() 推入的历史都带 d，用于判断「返回」能否真的退回
+ * 上一步，而不是误跳出站点；浏览器原生 popstate 负责还原 URL / 筛选 / 滚动。
+ * ---------------------------------------------------------------------- */
+function stateDepth(){try{const s=history.state;return s&&typeof s.d==='number'?s.d:0}catch(e){return 0}}
+function goBack(){
+  if(stateDepth()>0){try{history.back();return}catch(e){}}
+  /* 直接打开详情页（外部链接 / 新标签）：没有上一步，回落到首页。
+     用 replaceState 而非 go('/')，不新增历史，避免「返回→后退→又回详情」。 */
+  if(FILE_MODE){location.hash='#/';return}
+  try{history.replaceState({d:0},'', '/')}catch(e){location.href='/';return}
   render();
 }
 function qsSet(obj){const p=new URLSearchParams();Object.entries(obj).forEach(([k,v])=>{if(v)p.set(k,v)});return '/?'+p.toString()}
@@ -2186,7 +2199,7 @@ function viewApp(slug){
   const storeUrl=cleanUrl(a.app.storeUrl),appSite=cleanUrl(a.app.website),dsSite=cleanUrl(designer?.website);
   const related=DB.apps.filter(x=>x.app.slug!==slug&&(x.app.categories||[]).some(c=>(a.app.categories||[]).some(y=>y.slug===c.slug))).slice(0,6);
   $('#view').innerHTML=`<div class="detail">
-    <a class="back" href="#/">← ${esc(t('back'))}</a>
+    <button type="button" class="back" data-act="goback" style="background:none;border:0;padding:0;cursor:pointer;line-height:inherit;font-family:inherit">← ${esc(t('back'))}</button>
     <div class="detail-head">
       <div class="detail-logo">
         <div class="detail-main" id="detail-main" role="button" tabindex="0" title="点击放大查看图标" aria-label="放大查看 ${esc(a.app.name)} 图标">${imgTag(ic?.url,'',a.app.name)}</div>
@@ -2324,7 +2337,7 @@ function viewPress(){
   const A=aboutContent();
   const stats=[['totalIcons',allIconCount()],['totalApps',DB.apps.length],['totalDesigners',DB.designers.length],['totalColors',activeColorGroups().length]];
   const showcase=galleryIcons().slice(0,8);
-  $('#view').innerHTML=`<div class="page wide"><a class="back" href="#/">← ${esc(t('back'))}</a><h1>${bi('press')}</h1><p>${bi('pressLead')}</p>
+  $('#view').innerHTML=`<div class="page wide"><button type="button" class="back" data-act="goback" style="background:none;border:0;padding:0;cursor:pointer;line-height:inherit;font-family:inherit">← ${esc(t('back'))}</button><h1>${bi('press')}</h1><p>${bi('pressLead')}</p>
     <div class="stat-grid">${stats.map(([k,v])=>`<div class="stat"><b>${v.toLocaleString()}</b><span>${bi(k)}</span></div>`).join('')}</div>
     <h2>品牌资源</h2>
     <div class="row wrap"><button class="btn sm" data-act="downloadlogo">↓ ${esc(t('downloadLogo'))}</button>
@@ -3896,6 +3909,7 @@ document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]');if(!el)return;
   const a=el.dataset.act,v=el.dataset.v;
   switch(a){
+    case 'goback':goBack();break;
     case 'langtoggle':{const m=$('#lang-menu');if(m){m.hidden=!m.hidden;el.setAttribute('aria-expanded',m.hidden?'false':'true')}break}
     case 'langset':{I18N.set(el.dataset.v);const m=$('#lang-menu');if(m)m.hidden=true;break}
     case 'updates':{
@@ -3907,7 +3921,7 @@ document.addEventListener('click',e=>{
       EXPLORE.reshuffle(); /* 第 53 轮：每次点击都换一批，不再二次点击退回时间序 */
       if(route().path!=='/'){go('/');break}
       const g=$('#grid');
-      if(g){const y=window.scrollY;g.innerHTML=gridHTML(orderedIcons(route().p),homeTab(route().p));observeImages();window.scrollTo(0,y)}
+      if(g){const y=window.scrollY;g.innerHTML=gridHTML(orderedIcons(route().p),homeTab(route().p));normalizeLinks();observeImages();window.scrollTo(0,y)}
       const b=$('.explore-btn');
       if(b){b.classList.toggle('on',EXPLORE.on);b.setAttribute('aria-pressed',String(EXPLORE.on));
         b.classList.remove('tap');void b.offsetWidth;b.classList.add('tap');
@@ -4253,8 +4267,12 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();document.querySelector('[data-act="cmslogin"]')?.click();
   }
 });
-if(FILE_MODE)window.addEventListener('hashchange',render);else window.addEventListener('popstate',render);
-let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().path==='/'){const g=$('#grid');if(g)g.innerHTML=gridHTML(orderedIcons(route().p),homeTab(route().p))}},180)});
+if(FILE_MODE)window.addEventListener('hashchange',()=>{
+  /* 离线母版用 hash 导航，新条目默认无 state；补一个 d 让「返回上一步」同样可用 */
+  try{if(!stateDepth())history.replaceState({d:1},'')}catch(e){}
+  render();
+});else window.addEventListener('popstate',render);
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().path==='/'){const g=$('#grid');if(g){g.innerHTML=gridHTML(orderedIcons(route().p),homeTab(route().p));normalizeLinks()}}},180)});
 
 /* ---------- boot ---------- */
 applySecurity();render();
