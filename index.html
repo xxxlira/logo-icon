@@ -1779,11 +1779,27 @@ function imgRetry(el){
        每次失败都换缓存键，绕开被 CDN 缓存成 text/html 的 SPA 回退页；外链保持原样。 */
     const site=/(^|\/)(icons|thumbs|related)\//.test(src);
     const bust=site?src+(src.indexOf('?')<0?'?':'&')+(n===0?'v='+ver:'r='+n+'-'+ver):src;
-    setTimeout(()=>{if(el.isConnected&&!el.dataset.fbDone)el.src=bust},700*(n+1));
+    /* 第 62 轮：首次失败立即换缓存键，不再等 700ms；后续仍保留退避 */
+    const wait=n===0?0:500*n;
+    setTimeout(()=>{if(el.isConnected&&!el.dataset.fbDone)el.src=bust},wait);
     return
   }
   imgFallback(el);
 }
+
+/* 第 62 轮 · 全局图片兜底（IMG_GLOBAL_HOOK_V62）
+   error 事件不冒泡，必须在 document 的 capture 阶段才能捕获所有 <img>。
+   只接管「站内图片 + 没有 inline onerror」的元素，避免与 imgTag() 的
+   onerror="imgRetry(this)" 重复触发；外链签名 URL 与 data:/blob: 不改写。 */
+if(!FILE_MODE)document.addEventListener('error',function(e){
+  const el=e.target;
+  if(!el||el.tagName!=='IMG'||el.hasAttribute('onerror'))return;
+  const src=el.getAttribute('src')||'';
+  if(!src||src.startsWith('data:')||src.startsWith('blob:'))return;
+  if(!/(^|\/)(icons|thumbs|related)\//.test(src))return;
+  if(el.dataset.try||el.dataset.fbDone)return;
+  imgRetry(el);
+},true);
 /* 外链图片看门狗：加载失败或长时间挂起时统一回退，避免出现破图/空白格 */
 function checkImages(){
   const now=Date.now();
@@ -3118,7 +3134,7 @@ function relatedImagesAdminHTML(a,slug){
   const imgs=relatedImagesOf(a);
   if(!imgs.length)return '<div class="small muted" style="grid-column:1/-1;padding:10px 0">还没有相关图片，添加后前台详情页会自动出现「相关图片」模块。</div>';
   return imgs.map((x,i)=>`<div class="ri-item">
-    <div class="ri-thumb-wrap"><img class="ri-thumb" src="${esc(asset(x.url))}" data-fb="${esc(placeholderFor(a.app.name))}" alt="相关图片 ${i+1}" onerror="imgFallback(this)" referrerpolicy="no-referrer">
+    <div class="ri-thumb-wrap"><img class="ri-thumb" src="${esc(asset(x.url))}" data-fb="${esc(placeholderFor(a.app.name))}" alt="相关图片 ${i+1}" onerror="imgRetry(this)" referrerpolicy="no-referrer">
       <label class="ri-check" title="勾选后可批量删除"><input type="checkbox" value="${esc(x.id||'')}"></label></div>
     <div class="ri-foot"><span class="tiny muted">${x.w&&x.h?`${x.w}×${x.h}`:'图片'}</span>
       <span class="row" style="gap:3px">
