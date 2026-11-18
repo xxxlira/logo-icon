@@ -3211,6 +3211,8 @@ function moveRelatedImage(slug,id,dir){
   a.app.relatedImages=list;a.updatedAt=nowISO();save();viewAdminAppEdit(slug);
 }
 function iconEditHTML(a,i){
+  /* 第 59 轮：历史版本曾把两枚图标写向同一路径，后台明确提示需重新上传 */
+  const dupShared=!!i.url&&a.icons.some(x=>x!==i&&String(x.url||'')===String(i.url||''));
   const dsel=DB.designers.map(d=>`<option value="${esc(d.slug)}" ${i.designer?.slug===d.slug?'selected':''}>${esc(d.name)}</option>`).join('');
   const mini='width:auto;padding:3px 6px;font-size:11px';
   return `<div class="icon-edit ${i.archivedAt?'archived':''}" data-icon="${esc(i.id)}">
@@ -3229,6 +3231,7 @@ function iconEditHTML(a,i){
         <button class="btn sm" data-act="archiveicon" data-slug="${esc(a.app.slug)}" data-icon="${esc(i.id)}">${i.archivedAt?'恢复':'归档'}</button>
         <button class="btn sm" data-act="iconupdate" data-slug="${esc(a.app.slug)}" data-icon="${esc(i.id)}">编辑</button>
       </div>
+      ${dupShared?`<div class="tiny" style="margin-top:7px;color:#b3261e;background:#fdecec;border:1px solid #f0c4c4;border-radius:6px;padding:5px 8px;line-height:1.5">⚠ 与同应用另一枚图标共用同一图片文件（第 59 轮前的旧版本会覆盖第二张图）。点左下角 ↻ 重新上传这枚图标，即可生成独立图片。</div>`:''}
     </div></div>`;
 }
 function setIconStyle(slug,id,v){

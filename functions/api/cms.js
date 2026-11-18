@@ -264,14 +264,37 @@ function publicPayload(db) {
   return p;
 }
 
+/* 第 59 轮 · 内容短哈希：只采样少量字符做 FNV，避免遍历几十万字符的 base64。
+   仅用于「同一路径却装了不同图片」时另起唯一文件名。 */
+function shortImageHash(s) {
+  const n = s.length;
+  const sample = String(n) + '|' + s.slice(0, 48) + '|' +
+    s.slice(Math.floor(n / 2), Math.floor(n / 2) + 48) + '|' + s.slice(-48);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < sample.length; i++) {
+    h ^= sample.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36).padStart(7, '0');
+}
+
 /* 把 DB 里的 dataURL 图片拆成独立文件，并把字段改成站内相对路径 */
 function extractImages(p) {
-  const files = [], seen = new Set(), mapped = [];
-  /* ref 用数组下标定位，前端拿到后把本机 DB 里对应的 dataURL 换成站内相对路径，
-     下一批请求就只带「还没上传」的图片，不再反复重传整馆（第 38 轮）。 */
+  const files = [], seen = new Map(), mapped = [];
+  /* 第 59 轮：seen 记录 path → base64。旧版是 Set，同名直接丢弃第二张，
+     导致「上传变体图标后显示成第一张」。现在同名不同图必须换名另存。 */
   const push = (path, b64, ref) => {
-    if (!seen.has(path)) { files.push({ path, base64: b64, ref }); seen.add(path); }
-    else mapped.push(ref);
+    const r = Object.assign({}, ref);
+    let use = path;
+    if (seen.has(use) && seen.get(use) !== b64) {
+      const m = use.match(/\.(webp|png|jpe?g)$/i);
+      const ext = m ? m[0] : '.webp';
+      use = use.slice(0, use.length - ext.length) + '-' + shortImageHash(b64 + use) + ext;
+    }
+    r.path = use;
+    if (!seen.has(use)) { files.push({ path: use, base64: b64, ref: r }); seen.set(use, b64); }
+    else mapped.push(r);
+    return use;
   };
   for (let ai = 0; ai < p.apps.length; ai++) {
     const a = p.apps[ai];
@@ -290,12 +313,15 @@ function extractImages(p) {
         if (typeof v !== 'string' || !v.startsWith('data:')) continue;
         const d = parseDataURL(v);
         if (!d) continue;                       // 非图片 dataURL（如内联 SVG）保留原样
-        const suffix = ic.type === 'variant' ? '-' + String(ic.id || '').replace(/[^a-z0-9-]/gi, '').slice(-24) : '';
+        /* 第 59 轮：文件名与 type 无关 —— 首枚非变体保留历史名 <slug>.<ext>，
+           其余一律带稳定后缀（图标 id 优先，缺失时用序号），
+           两枚 type='default' 也不会再共用同一文件。 */
+        const idPart = String(ic.id || '').replace(/[^a-z0-9-]/gi, '').slice(-24);
+        const suffix = (ii === 0 && ic.type !== 'variant') ? '' : '-' + (idPart || ('i' + ii));
         const dir = field === 'hdUrl' ? 'icons' : 'thumbs';
         const name = slug + suffix + '.' + d.ext;
         if (!SAFE_NAME.test(name)) throw new Error('图片文件名不合法：' + name);
-        const path = dir + '/' + name;
-        push(path, d.b64, { ai, ii, field, path });
+        const path = push(dir + '/' + name, d.b64, { ai, ii, field });
         remember(d.b64, path);
         ic[field] = path;
       }
@@ -311,8 +337,7 @@ function extractImages(p) {
       const rid = String(r.id || '').replace(/[^a-z0-9-]/gi, '').slice(-24) || 'img';
       const name = slug + '-' + rid + '.' + d.ext;
       if (!SAFE_NAME.test(name)) throw new Error('相关图片文件名不合法：' + name);
-      const path = 'related/' + name;
-      push(path, d.b64, { ai, ri, field: 'related', path });
+      const path = push('related/' + name, d.b64, { ai, ri, field: 'related' });
       remember(d.b64, path);
       r.url = path;
     }
@@ -327,8 +352,7 @@ function extractImages(p) {
         if (!path) {
           const name = slug + '-default.' + dd.ext;
           if (!SAFE_NAME.test(name)) throw new Error('默认图标文件名不合法：' + name);
-          path = 'thumbs/' + name;
-          push(path, dd.b64, { ai, field: 'defaultIconUrl', path });
+          path = push('thumbs/' + name, dd.b64, { ai, field: 'defaultIconUrl' });
           remember(dd.b64, path);
         } else {
           mapped.push({ ai, field: 'defaultIconUrl', path });
