@@ -1787,17 +1787,20 @@ function imgRetry(el){
   imgFallback(el);
 }
 
-/* 第 62 轮 · 全局图片兜底（IMG_GLOBAL_HOOK_V62）
+/* 第 62 轮 · 全局图片兜底（IMG_GLOBAL_HOOK_V62B）
    error 事件不冒泡，必须在 document 的 capture 阶段才能捕获所有 <img>。
    只接管「站内图片 + 没有 inline onerror」的元素，避免与 imgTag() 的
-   onerror="imgRetry(this)" 重复触发；外链签名 URL 与 data:/blob: 不改写。 */
+   onerror="imgRetry(this)" 重复触发；外链签名 URL 与 data:/blob: 不改写。
+   注意：不能用 el.dataset.try 提前 return —— 这类元素完全依赖本监听推进，
+   第一次换键后若仍失败必须继续交给 imgRetry，直到 3 次耗尽并落占位图，
+   否则会永久停在破图状态（V62B 修复）。 */
 if(!FILE_MODE)document.addEventListener('error',function(e){
   const el=e.target;
   if(!el||el.tagName!=='IMG'||el.hasAttribute('onerror'))return;
   const src=el.getAttribute('src')||'';
   if(!src||src.startsWith('data:')||src.startsWith('blob:'))return;
   if(!/(^|\/)(icons|thumbs|related)\//.test(src))return;
-  if(el.dataset.try||el.dataset.fbDone)return;
+  if(el.dataset.fbDone)return;
   imgRetry(el);
 },true);
 /* 外链图片看门狗：加载失败或长时间挂起时统一回退，避免出现破图/空白格 */
