@@ -2079,9 +2079,15 @@ function go(to){
   to=to||'/';
   if(FILE_MODE){if(location.hash==='#'+to)render();else location.hash='#'+to;return}
   if(routeRaw()===to){render();return}
-  try{history.pushState({d:stateDepth()+1},'',to)}catch(e){location.href=to;return}
-  render();
+  /* 第 64 轮：离开当前条目之前先记下滚动位置，供「返回」时还原。 */
+  try{history.replaceState(Object.assign({},history.state,{d:stateDepth(),y:window.scrollY||0}),'')}catch(e){}
+  /* 同一详情页只切换 ?icon= 变体：不新增历史，保持原地滚动，让主图就地更新。 */
+  const sameDetail = route().path.indexOf('/apps/')===0 && to.split('?')[0]===route().path;
+  try{history.pushState({d:sameDetail?stateDepth():stateDepth()+1,y:0},'',to)}catch(e){location.href=to;return}
+  render(sameDetail?{scroll:'keep'}:{scroll:'top'});
 }
+/* 第 64 轮：读取当前历史条目保存的滚动位置；无记录返回 0。 */
+function savedScrollY(){try{const s=history.state;return s&&typeof s.y==='number'?s.y:0}catch(e){return 0}}
 /* 第 58 轮 · 返回上一步 ----------------------------------------------------
  * 站内历史深度：每条由 go() 推入的历史都带 d，用于判断「返回」能否真的退回
  * 上一步，而不是误跳出站点；浏览器原生 popstate 负责还原 URL / 筛选 / 滚动。
@@ -2092,8 +2098,8 @@ function goBack(){
   /* 直接打开详情页（外部链接 / 新标签）：没有上一步，回落到首页。
      用 replaceState 而非 go('/')，不新增历史，避免「返回→后退→又回详情」。 */
   if(FILE_MODE){location.hash='#/';return}
-  try{history.replaceState({d:0},'', '/')}catch(e){location.href='/';return}
-  render();
+  try{history.replaceState({d:0,y:0},'', '/')}catch(e){location.href='/';return}
+  render({scroll:'top'});
 }
 function qsSet(obj){const p=new URLSearchParams();Object.entries(obj).forEach(([k,v])=>{if(v)p.set(k,v)});return '/?'+p.toString()}
 
@@ -3732,7 +3738,11 @@ function viewAdmin(path){
 }
 
 /* ---------- router ---------- */
-function render(){
+function render(opts){
+  opts=opts||{};
+  const mode=opts.scroll||'top';
+  const keepY=window.scrollY||0;
+  const restoreY=savedScrollY();
   document.body.className='lang-zh';
   closeModal();renderNav();
   const {path,p}=route();
@@ -3744,7 +3754,11 @@ function render(){
   else if(path.startsWith('/admin'))viewAdmin(path);
   else view404();
   normalizeLinks();observeImages();
-  window.scrollTo(0,0);
+  /* 第 64 轮：滚动位置按导航意图决定，不再无条件归零。
+     top=新导航回顶；restore=返回时还原进入前的滚动位置；keep=同页变体切换原地不动。 */
+  if(mode==='restore')window.scrollTo(0,restoreY);
+  else if(mode==='keep')window.scrollTo(0,keepY);
+  else window.scrollTo(0,0);
 }
 
 /* 站内路由：拦截规范化后的链接，用 pushState 切换视图，地址栏保持无 # */
@@ -4111,9 +4125,9 @@ document.addEventListener('keydown',e=>{
 });
 if(FILE_MODE)window.addEventListener('hashchange',()=>{
   /* 离线母版用 hash 导航，新条目默认无 state；补一个 d 让「返回上一步」同样可用 */
-  try{if(!stateDepth())history.replaceState({d:1},'')}catch(e){}
-  render();
-});else window.addEventListener('popstate',render);
+  try{if(!stateDepth())history.replaceState({d:1,y:0},'')}catch(e){}
+  render({scroll:'restore'});
+});else window.addEventListener('popstate',()=>render({scroll:'restore'}));
 let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(route().path==='/'){const g=$('#grid');if(g){g.innerHTML=gridHTML(orderedIcons(route().p),homeTab(route().p));normalizeLinks()}}},180)});
 
 /* ---------- boot ---------- */
