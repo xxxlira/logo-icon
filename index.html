@@ -2084,7 +2084,12 @@ function go(to){
   try{history.replaceState(Object.assign({},history.state,{d:stateDepth(),y:window.scrollY||0}),'')}catch(e){}
   /* 同一详情页只切换 ?icon= 变体：不新增历史，保持原地滚动，让主图就地更新。 */
   const sameDetail = route().path.indexOf('/apps/')===0 && to.split('?')[0]===route().path;
-  try{history.pushState({d:sameDetail?stateDepth():stateDepth()+1,y:0},'',to)}catch(e){location.href=to;return}
+  if(sameDetail){
+    /* 变体重温：只替换当前条目，绝不新增历史；保留 y 让「返回」直接回上一页、滚动也在原位。 */
+    try{history.replaceState(Object.assign({},history.state,{y:window.scrollY||0}),'',to)}catch(e){location.href=to;return}
+  }else{
+    try{history.pushState({d:stateDepth()+1,y:0},'',to)}catch(e){location.href=to;return}
+  }
   render(sameDetail?{scroll:'keep'}:{scroll:'top'});
 }
 /* 第 64 轮：读取当前历史条目保存的滚动位置；无记录返回 0。 */
