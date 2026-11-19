@@ -1870,10 +1870,14 @@ function defaultIcon(a){return a.icons.find(i=>i.type==='default'&&!i.archivedAt
    两者取较大者；都没有时间记 0，排序时沉到最后。 */
 function iconTime(i){
   if(!i)return 0;
-  const u=Date.parse(i.updatedAt||'');
-  const dRaw=Date.parse(i.date||'');
-  const d=isNaN(dRaw)?0:dRaw+86399000;   /* 当天 23:59:59 */
-  return Math.max(isNaN(u)?0:u, d);
+  const dRaw=Date.parse(i.date||''),uRaw=Date.parse(i.updatedAt||'');
+  const d=isNaN(dRaw)?0:dRaw,u=isNaN(uRaw)?0:uRaw;
+  /* 以卡片展示的日期 date 为主键：用户看到的「最新」就是这个日期。
+     updatedAt 只在 date 相同或缺失时细分，避免一次后台发布刷新了
+     updatedAt，就把日期更早的旧变体误判成最新。 */
+  if(!d)return u;
+  const frac=(u>=d&&u<d+86400000)?(u-d)/86400000:0;
+  return d+frac;
 }
 /* 每个应用取「时间上最新」的未归档变体；时间相同则取数组靠后的一枚，
    全部无时间时回退到 defaultIcon，保证老数据行为不变。 */

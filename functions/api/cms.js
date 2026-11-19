@@ -287,7 +287,7 @@ function mergeIncremental(draft, baseline) {
     for (const ic of draftIcons) {
       const id = ic && ic.id, old = id ? byId.get(id) : null;
       if (!old) { out.push(ic); if (id) used.add(id); continue; }
-      const pick = ts(ic) >= ts(old) ? ic : old;
+      const pick = ts(ic) > ts(old) ? ic : old;
       if (pick === old) kept++;
       out.push(pick);
       used.add(id);
