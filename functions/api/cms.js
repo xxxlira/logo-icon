@@ -253,6 +253,53 @@ function publicPayload(db) {
   return p;
 }
 
+/* 第 65 轮 C · 增量发布合并 -------------------------------------------------
+   以线上清单为基线，本机草稿只贡献「新增 + 修改」，线上已有而草稿未触及的
+   变体保持不动。这样旧浏览器 / 过期草稿点「发布到线上」不会再把线上刚更新
+   的图标回滚成默认图。
+   - 应用列表仍以草稿为准（批量删除应用照常生效）
+   - 图标按 id 合并：updatedAt（或 date）草稿 >= 线上时用草稿，否则保留线上；
+     草稿独有的 id 是新增，线上独有的 id 是别处刚加的变体，必须留下
+   - 应用级字段：草稿应用比线上新才整体生效，否则只让上面的图标增量生效
+   - kept = 本次被保护的线上变体数，随响应回传，便于核对
+   ------------------------------------------------------------------------ */
+function mergeIncremental(draft, baseline) {
+  const kept0 = { p: draft, kept: 0 };
+  if (!baseline || !Array.isArray(baseline.apps) || !Array.isArray(draft.apps)) return kept0;
+  const ts = o => {
+    const v = Date.parse((o && (o.updatedAt || o.date)) || '');
+    return isNaN(v) ? 0 : v;
+  };
+  const baseBySlug = new Map();
+  for (const a of baseline.apps) {
+    const s = a && a.app && a.app.slug;
+    if (s) baseBySlug.set(s, a);
+  }
+  let kept = 0;
+  const apps = draft.apps.map(d => {
+    const slug = d && d.app && d.app.slug;
+    const b = slug ? baseBySlug.get(slug) : null;
+    if (!b || !Array.isArray(b.icons)) return d;
+    const baseIcons = b.icons, draftIcons = Array.isArray(d.icons) ? d.icons : [];
+    const byId = new Map();
+    for (const ic of baseIcons) if (ic && ic.id) byId.set(ic.id, ic);
+    const out = [], used = new Set();
+    for (const ic of draftIcons) {
+      const id = ic && ic.id, old = id ? byId.get(id) : null;
+      if (!old) { out.push(ic); if (id) used.add(id); continue; }
+      const pick = ts(ic) >= ts(old) ? ic : old;
+      if (pick === old) kept++;
+      out.push(pick);
+      used.add(id);
+    }
+    /* 线上有、草稿没有的变体：不是被删（图标删除走归档，仍在数组里），
+       而是草稿更旧没同步到，原样保留。 */
+    for (const ic of baseIcons) if (ic && ic.id && !used.has(ic.id)) out.push(ic);
+    return ts(d) >= ts(b) ? { ...d, icons: out } : { ...b, icons: out };
+  });
+  return { p: Object.assign({}, draft, { apps }), kept };
+}
+
 /* 第 59 轮 · 内容短哈希：只采样少量字符做 FNV，避免遍历几十万字符的 base64。
    仅用于「同一路径却装了不同图片」时另起唯一文件名。 */
 function shortImageHash(s) {
@@ -662,7 +709,7 @@ async function handlePost(ctx) {
 
   if (body.action === 'save') {
     const saveT0 = Date.now();   /* 第 45 轮：把服务端耗时回传，便于区分链路慢 / GitHub 慢 */
-    const p = publicPayload(body.db || {});
+    let p = publicPayload(body.db || {});
     const pubId = safePubId(body.pubId);
     p.publishId = pubId;
     /* 新版前端每批只带「还没上传」的 dataURL，offset 表示已累计上传数量。
@@ -692,6 +739,10 @@ async function handlePost(ctx) {
              + '若确实要批量删除，请分批操作。草稿已保留，没有丢失。'
       }, 409);
     }
+    /* 第 65 轮 C：以线上清单为基线做增量合并，草稿只带新增与修改，
+       线上较新的变体原样保留，避免旧草稿整包覆盖。 */
+    const merge = mergeIncremental(p, oldM);
+    p = merge.p;
     /* extractImages 同时把 p 里的 dataURL 改写成站内相对路径 */
     const { files: images, mapped, dupes } = extractImages(p);
     const remaining = images.length;
@@ -742,7 +793,7 @@ async function handlePost(ctx) {
     const c = cacheObj();
     if (c) { try { await c.delete(cacheKey(url)); } catch (e) { /* ignore */ } }
     return json({ ok: true, sha, files: items.length, generatedAt: p.generatedAt,
-      skippedBuild, total: totalForUI,
+      skippedBuild, total: totalForUI, protectedIcons: merge.kept || 0,
       refs: images.map(f => f.ref).filter(Boolean), mapped, dupes,
       chunks: remaining > BATCH_SIZE ? Math.ceil(remaining / BATCH_SIZE) : 0,
       serverMs: Date.now() - saveT0 });
