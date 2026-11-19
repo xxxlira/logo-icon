@@ -269,7 +269,7 @@ function shortImageHash(s) {
 
 /* 把 DB 里的 dataURL 图片拆成独立文件，并把字段改成站内相对路径 */
 function extractImages(p) {
-  const files = [], seen = new Map(), mapped = [];
+  const files = [], seen = new Map(), mapped = [], dupes = [];
   /* 第 59 轮：seen 记录 path → base64。旧版是 Set，同名直接丢弃第二张，
      导致「上传变体图标后显示成第一张」。现在同名不同图必须换名另存。 */
   const push = (path, b64, ref) => {
@@ -350,7 +350,20 @@ function extractImages(p) {
       }
     }
   }
-  return { files, mapped };
+  /* 第 63 轮：同一次提交里，同一应用的两枚图标若被写入完全相同的字节，
+     记一条告警随响应回传，管理员发布后立刻能看到，而不是等访客发现。 */
+  const byApp = new Map();
+  for (const f of files) {
+    const r = f.ref || {};
+    if (r.field !== 'url' || typeof r.ii !== 'number') continue;
+    if (!byApp.has(r.ai)) byApp.set(r.ai, new Map());
+    const seenBytes = byApp.get(r.ai);
+    if (seenBytes.has(f.base64)) {
+      const app = p.apps[r.ai];
+      dupes.push({ slug: (app && app.app && app.app.slug) || '', a: seenBytes.get(f.base64), b: r.ii });
+    } else seenBytes.set(f.base64, r.ii);
+  }
+  return { files, mapped, dupes };
 }
 
 
@@ -486,7 +499,7 @@ function buildIconsIndex(p) {
         categories: cats, styles: sl, styleLabels: sl.map(x => labels[x] || x),
         palette: pal, monochrome: f.monochrome, neutral_ratio: f.neutral_ratio,
         dominant: f.dominant, designer: (ic.designer && ic.designer.name) || '',
-        platform: ic.platform || '', date: ic.date || '', updatedAt: a.updatedAt || ''
+        platform: ic.platform || '', date: ic.date || '', updatedAt: ic.updatedAt || a.updatedAt || ''
       });
     }
   }
@@ -680,7 +693,7 @@ async function handlePost(ctx) {
       }, 409);
     }
     /* extractImages 同时把 p 里的 dataURL 改写成站内相对路径 */
-    const { files: images, mapped } = extractImages(p);
+    const { files: images, mapped, dupes } = extractImages(p);
     const remaining = images.length;
     const offset = Math.max(0, Number(body.offset) || 0);
     /* 进度条用的总数：增量模式下要加上前面批次已上传的数量 */
@@ -698,7 +711,7 @@ async function handlePost(ctx) {
       return json({ ok: true, chunk: true, total: totalForUI, written: slice.length, next,
         sha, skippedBuild: true, generatedAt: p.generatedAt,
         refs: slice.map(f => f.ref).filter(Boolean),
-        mapped: mapped.filter(r => paths.has(r.path)),
+        mapped: mapped.filter(r => paths.has(r.path)), dupes,
         serverMs: Date.now() - saveT0 });
     }
 
@@ -730,7 +743,7 @@ async function handlePost(ctx) {
     if (c) { try { await c.delete(cacheKey(url)); } catch (e) { /* ignore */ } }
     return json({ ok: true, sha, files: items.length, generatedAt: p.generatedAt,
       skippedBuild, total: totalForUI,
-      refs: images.map(f => f.ref).filter(Boolean), mapped,
+      refs: images.map(f => f.ref).filter(Boolean), mapped, dupes,
       chunks: remaining > BATCH_SIZE ? Math.ceil(remaining / BATCH_SIZE) : 0,
       serverMs: Date.now() - saveT0 });
   }
