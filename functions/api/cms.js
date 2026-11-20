@@ -422,14 +422,16 @@ function extractImages(p) {
  *   减少颜色筛选的误命中（8 色里常混入无关色相族）。
  * - 每次发布同时写 icons.json，索引 version = publishId。
  * ---------------------------------------------------------------------- */
-const STYLE_FIX = { flat: '扁平', gradient: '渐变', minimal: '极简',
-  skeuomorphic: '拟人', glass: '玻璃', '3d': '3D', 'style-mwa1j4ggya0': '手绘' };
+const STYLE_FIX = { flat: '扁平', gradient: '玻璃', minimal: '渐变',
+  skeuomorphic: '拟人', glass: '拟物', '3d': '3D', 'style-mwa1j4ggya0': '手绘',
+  'style-minimal-v2': '极简' };
 const STYLE_MERGE = { 'three-d': '3d',
   /* 第 66 轮：后台误建的新「玻璃」slug 合并回官方 glass，避免一个风格被拆成两个 */
-  'style-mwob8jy4wq2': 'glass' };
+  'style-mwob8jy4wq2': 'gradient' };
 const STYLE_ALIASES = {
   '拟人': ['skeuomorphic'], '拟人化': ['skeuomorphic'], '卡通角色': ['skeuomorphic'],
-  '拟物': ['glass'], '玻璃质感': ['glass'], '玻璃': ['glass'], '玻璃风格': ['glass'],
+  '拟物': ['glass'], '玻璃质感': ['gradient'], '玻璃': ['gradient'], '玻璃风格': ['gradient'],
+  '渐变': ['minimal'], '极简': ['style-minimal-v2'],
   '黑白': ['@monochrome'], '单色': ['@monochrome'], '无彩色': ['@monochrome'],
   'monochrome': ['@monochrome'], '黑白配色': ['@monochrome'],
   '扁平': ['flat'], '极简': ['minimal'], '渐变': ['gradient'],
