@@ -416,26 +416,36 @@ function extractImages(p) {
 
 /* ---- 第 57 轮 · 数据规范化 / AI 索引 ----------------------------------
  * 与本地 apply_r57_data.py 完全同一套算法，保证 CMS 发布与手工构建结果一致。
- * - 风格表：name == zh，保留「拟人」(skeuomorphic) 与「拟物」(glass)，
+ * - 风格表：以飞书「图标明细」为准，7 项（扁平/玻璃/渐变/极简/拟人/3D/手绘），无「拟物」；
  *   three-d 合并进 3d；旧链接 ?style=three-d 由前端 applyFilters 兜底。
  * - 配色：按站点 colorFamily() 的色相族分组，每枚图标压到 3-5 色，
  *   减少颜色筛选的误命中（8 色里常混入无关色相族）。
  * - 每次发布同时写 icons.json，索引 version = publishId。
  * ---------------------------------------------------------------------- */
 const STYLE_FIX = { flat: '扁平', gradient: '玻璃', minimal: '渐变',
-  skeuomorphic: '拟人', glass: '拟物', '3d': '3D', 'style-mwa1j4ggya0': '手绘',
+  skeuomorphic: '拟人', '3d': '3D', 'style-mwa1j4ggya0': '手绘',
   'style-minimal-v2': '极简' };
-const STYLE_MERGE = { 'three-d': '3d',
-  /* 第 66 轮：后台误建的新「玻璃」slug 合并回官方 glass，避免一个风格被拆成两个 */
-  'style-mwob8jy4wq2': 'gradient' };
+const STYLE_MERGE = { 'three-d': '3d', glass: 'gradient',
+  'style-mwob8jy4wq2': 'gradient', 'hand-drawn': 'style-mwa1j4ggya0',
+  pixel: '3d' };
 const STYLE_ALIASES = {
-  '拟人': ['skeuomorphic'], '拟人化': ['skeuomorphic'], '卡通角色': ['skeuomorphic'],
-  '拟物': ['glass'], '玻璃质感': ['gradient'], '玻璃': ['gradient'], '玻璃风格': ['gradient'],
-  '渐变': ['minimal'], '极简': ['style-minimal-v2'],
-  '黑白': ['@monochrome'], '单色': ['@monochrome'], '无彩色': ['@monochrome'],
-  'monochrome': ['@monochrome'], '黑白配色': ['@monochrome'],
-  '扁平': ['flat'], '极简': ['minimal'], '渐变': ['gradient'],
-  '3D': ['3d'], '立体': ['3d'], '手绘': ['style-mwa1j4ggya0'], '像素': ['3d']
+  "扁平": ["flat"],
+  "玻璃": ["gradient"],
+  "玻璃质感": ["gradient"],
+  "玻璃风格": ["gradient"],
+  "渐变": ["minimal"],
+  "极简": ["style-minimal-v2"],
+  "拟人": ["skeuomorphic"],
+  "拟人化": ["skeuomorphic"],
+  "卡通角色": ["skeuomorphic"],
+  "3D": ["3d"],
+  "立体": ["3d"],
+  "手绘": ["style-mwa1j4ggya0"],
+  "黑白": ["@monochrome"],
+  "单色": ["@monochrome"],
+  "无彩色": ["@monochrome"],
+  "monochrome": ["@monochrome"],
+  "黑白配色": ["@monochrome"]
 };
 const PALETTE_CAP = 5;
 
