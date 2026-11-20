@@ -416,31 +416,39 @@ function extractImages(p) {
 
 /* ---- 第 57 轮 · 数据规范化 / AI 索引 ----------------------------------
  * 与本地 apply_r57_data.py 完全同一套算法，保证 CMS 发布与手工构建结果一致。
- * - 风格表：以飞书「图标明细」为准，7 项（扁平/玻璃/渐变/极简/拟人/3D/手绘），无「拟物」；
+ * - 风格表：以飞书「应用清单 / 风格」10 项多选选项为准，顺序与飞书一致；
  *   three-d 合并进 3d；旧链接 ?style=three-d 由前端 applyFilters 兜底。
  * - 配色：按站点 colorFamily() 的色相族分组，每枚图标压到 3-5 色，
  *   减少颜色筛选的误命中（8 色里常混入无关色相族）。
  * - 每次发布同时写 icons.json，索引 version = publishId。
  * ---------------------------------------------------------------------- */
-const STYLE_FIX = { flat: '扁平', gradient: '玻璃', minimal: '渐变',
-  skeuomorphic: '拟人', '3d': '3D', 'style-mwa1j4ggya0': '手绘',
-  'style-minimal-v2': '极简' };
-const STYLE_MERGE = { 'three-d': '3d', glass: 'gradient',
-  'style-mwob8jy4wq2': 'gradient', 'hand-drawn': 'style-mwa1j4ggya0',
-  pixel: '3d' };
+const STYLE_FIX = { flat: '扁平', gradient: '玻璃', line: '线性', text: '文字',
+  '3d': '3D/黏土', minimal: '渐变', glass: '拟物', skeuomorphic: '拟人',
+  'style-mwa1j4ggya0': '手绘/插画', pixel: '像素' };
+const STYLE_MERGE = { 'three-d': '3d', 'hand-drawn': 'style-mwa1j4ggya0',
+  'style-mwob8jy4wq2': 'gradient' };
 const STYLE_ALIASES = {
   "扁平": ["flat"],
   "玻璃": ["gradient"],
   "玻璃质感": ["gradient"],
   "玻璃风格": ["gradient"],
+  "线性": ["line"],
+  "线框": ["line"],
+  "文字": ["text"],
+  "字标": ["text"],
+  "3D/黏土": ["3d"],
+  "3D": ["3d"],
+  "立体": ["3d"],
+  "黏土": ["3d"],
   "渐变": ["minimal"],
-  "极简": ["style-minimal-v2"],
+  "拟物": ["glass"],
   "拟人": ["skeuomorphic"],
   "拟人化": ["skeuomorphic"],
   "卡通角色": ["skeuomorphic"],
-  "3D": ["3d"],
-  "立体": ["3d"],
+  "手绘/插画": ["style-mwa1j4ggya0"],
   "手绘": ["style-mwa1j4ggya0"],
+  "插画": ["style-mwa1j4ggya0"],
+  "像素": ["pixel"],
   "黑白": ["@monochrome"],
   "单色": ["@monochrome"],
   "无彩色": ["@monochrome"],
