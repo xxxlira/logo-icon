@@ -86,7 +86,13 @@ header.nav{position:sticky;top:0;z-index:60;background:#fff;border-bottom:1px so
 .nav-search-btn:hover{background:#fff;color:#262626}
 .nav-search-btn span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nav-search-btn svg,.sp-head svg{flex-shrink:0;display:block}
-@media(max-width:640px){.nav-inner{gap:6px;padding:0 16px}.nav-left,.nav-right{gap:6px}.nav-link{padding:0 12px;font-size:13px}.nav-search{width:40px}.nav-search-btn{padding:0;justify-content:center;border-radius:50%}.nav-search-btn span{display:none}}
+@media(max-width:640px){.nav-inner{gap:6px;padding:0 16px}.nav-left,.nav-right{gap:6px}.nav-link{padding:0 12px;font-size:13px}}
+/* 小屏 / 手机：搜索框只留图标按钮，避免占据导航栏中间 */
+@media(max-width:720px){
+  .nav-search,.nav-search:hover,.nav-search:focus-within{position:static;left:auto;top:auto;transform:none;width:40px;max-width:40px;z-index:auto}
+  .nav-search-btn{width:40px;height:40px;padding:0;justify-content:center;border-radius:50%;background:rgba(0,0,0,.05)}
+  .nav-search-btn span{display:none!important}
+}
 /* 第 52 轮 · 当日更新徽标：brand 右侧，最多 2 枚最新 logo + 当日更新数量 */
 .nav-left{display:flex;align-items:center;gap:8px;flex-shrink:0;min-width:0}
 .nav-upd{display:inline-flex;align-items:center;gap:5px;padding:3px 7px 3px 3px;border:0;border-radius:99px;background:transparent;font-family:inherit;font-size:12px;line-height:1;color:#9a9a97;white-space:nowrap;cursor:pointer}
@@ -2472,6 +2478,9 @@ function openRelatedLightbox(url,name){
   </div>`);
   $('#overlay').classList.add('lb-overlay');
 }
+function developerKey(d){
+  const s=d?.slug||d?.id||d?.name;return s?String(s).toLowerCase().trim():'';
+}
 function viewApp(slug){
   const a=appBySlug(slug);if(!a){view404();return}
   const p=route().p,all=a.icons.filter(i=>!i.archivedAt);
@@ -2481,6 +2490,8 @@ function viewApp(slug){
   const cats=(a.app.categories||[]).map(c=>catName(c)).join('、')||'—';
   const storeUrl=cleanUrl(a.app.storeUrl),appSite=cleanUrl(a.app.website),dsSite=cleanUrl(designer?.website);
   const related=DB.apps.filter(x=>x.app.slug!==slug&&(x.app.categories||[]).some(c=>(a.app.categories||[]).some(y=>y.slug===c.slug))).slice(0,6);
+  const devKey=developerKey(a.app.developer);
+  const sameDev=devKey?DB.apps.filter(x=>x.app.slug!==slug&&developerKey(x.app.developer)===devKey).slice(0,12):[];
   $('#view').innerHTML=`<div class="detail">
     <button type="button" class="back" data-act="goback" style="background:none;border:0;padding:0;cursor:pointer;line-height:inherit;font-family:inherit">← ${esc(t('back'))}</button>
     <div class="detail-head">
@@ -2523,6 +2534,7 @@ function viewApp(slug){
     </div>`}
     <h2>${bi('related')}</h2>
     <div class="related">${related.map(x=>`<a class="tile" href="#${appPath(x.app.slug)}">${imgTag(x.defaultIconUrl,'',x.app.name)}</a>`).join('')||'<span class="muted small">—</span>'}</div>
+    ${sameDev.length?`<h2>同开发者应用</h2><div class="related">${sameDev.map(x=>`<a class="tile" href="#${appPath(x.app.slug)}" title="${esc(x.app.name)}">${imgTag(x.defaultIconUrl,'',x.app.name)}</a>`).join('')}</div>`:''}
   </div>`;
   const dm=$('#detail-main'),openLb=()=>openIconLightbox(ic?.url,a.app.name,ic?.hdUrl);
   dm.addEventListener('click',openLb);
