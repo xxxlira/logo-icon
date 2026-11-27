@@ -67,18 +67,28 @@ label.field>span .hint{font-weight:400;color:var(--muted)}
 .tag{display:inline-flex;align-items:center;gap:4px;background:var(--secondary);border-radius:6px;padding:2px 7px;font-size:11px;font-weight:600;color:#666}
 
 /* ---------- header ---------- */
-header.nav{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);backdrop-filter:blur(12px);border-bottom:1px solid transparent}
-.nav-inner{max-width:1280px;margin:0 auto;height:56px;padding:0 24px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:16px}
-.brand{display:inline-flex;align-items:center;height:32px;flex-shrink:0}
-.brand-logo{display:block;height:28px;width:auto;max-width:220px;object-fit:contain;object-position:left center}
+header.nav{position:sticky;top:0;z-index:60;background:#fff;border-bottom:1px solid #e6e6e6}
+/* 与 logosystem.co 导航尺寸对齐：64px 高 / 40px 胶囊 / 360→440px 搜索框 */
+.nav-inner{position:relative;max-width:none;margin:0;height:64px;padding:0 16px;display:flex;align-items:center;gap:8px}
+.nav-left{display:flex;align-items:center;gap:8px;flex-shrink:0;min-width:0}
+.brand{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.05);flex-shrink:0;transition:background .15s}
+.brand:hover{background:rgba(0,0,0,.08)}
+.brand-logo{display:block;width:20px;height:20px;max-width:none;object-fit:contain}
 .logo-preview{border:1px dashed var(--border);border-radius:12px;background:#fafafa;min-height:78px;display:flex;align-items:center;justify-content:center;padding:12px;overflow:hidden}
 .logo-preview img{max-height:56px;max-width:100%;width:auto;height:auto;object-fit:contain}
-.nav-right{display:flex;align-items:center;justify-content:flex-end;gap:4px}
-.nav-link{padding:6px 10px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--muted);background:none;border:0}
-.nav-link:hover{color:var(--fg);background:var(--secondary)}
-.nav-link.active{color:var(--fg)}
+.nav-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+.nav-link{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 16px;border:1px solid #e6e6e6;border-radius:999px;background:rgba(0,0,0,.05);color:#8a8a8a;font-size:14px;font-weight:500;line-height:1;white-space:nowrap;transition:background .15s,color .15s,border-color .15s}
+.nav-link:hover{background:rgba(0,0,0,.08);color:#262626}
+.nav-link.active{border-color:#262626;background:#262626;color:#fff;font-weight:600}
+.nav-search{position:absolute;left:50%;top:12px;transform:translateX(-50%);width:360px;max-width:calc(100vw - 24px);z-index:61;transition:width .2s ease-out}
+.nav-search:hover,.nav-search:focus-within{width:440px}
+.nav-search-btn{width:100%;height:40px;display:flex;align-items:center;gap:10px;padding:0 12px 0 16px;border:1px solid #e6e6e6;border-radius:22px;background:#fafafa;color:#8a8a8a;font-size:14px;text-align:left}
+.nav-search-btn:hover{background:#fff;color:#262626}
+.nav-search-btn span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-search-btn svg,.sp-head svg{flex-shrink:0;display:block}
+@media(max-width:640px){.nav-inner{gap:6px;padding:0 16px}.nav-left,.nav-right{gap:6px}.nav-link{padding:0 12px;font-size:13px}.nav-search{width:40px}.nav-search-btn{padding:0;justify-content:center;border-radius:50%}.nav-search-btn span{display:none}}
 /* 第 52 轮 · 当日更新徽标：brand 右侧，最多 2 枚最新 logo + 当日更新数量 */
-.nav-left{display:flex;align-items:center;gap:10px;min-width:0}
+.nav-left{display:flex;align-items:center;gap:8px;flex-shrink:0;min-width:0}
 .nav-upd{display:inline-flex;align-items:center;gap:5px;padding:3px 7px 3px 3px;border:0;border-radius:99px;background:transparent;font-family:inherit;font-size:12px;line-height:1;color:#9a9a97;white-space:nowrap;cursor:pointer}
 .nav-upd:hover{color:var(--fg);background:var(--secondary)}
 .nav-upd:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -89,7 +99,7 @@ header.nav{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);bac
 .nav-upd-logos img:last-child:not(:first-child){transform:rotate(6deg)}
 .nav-upd-label,.nav-upd-num{font-size:12px}
 .nav-upd-num{font-variant-numeric:tabular-nums}
-@media(max-width:560px){.nav-left{gap:6px}.nav-upd{gap:3px;padding:2px 4px 2px 2px}.nav-upd-logos img{width:21px;height:21px;border-radius:7px}.nav-upd-label,.nav-upd-num{font-size:11px}.nav-link{padding:5px 7px;font-size:12px}}
+@media(max-width:560px){.nav-left{gap:6px}.nav-upd{gap:3px;padding:2px 4px 2px 2px}.nav-upd-logos img{width:21px;height:21px;border-radius:7px}.nav-upd-label,.nav-upd-num{font-size:11px}.nav-link{padding:0 12px;font-size:13px}}
 .icon-gear{width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--muted);border:0;background:none}
 .icon-gear:hover{background:var(--secondary);color:var(--fg)}
 
@@ -211,6 +221,12 @@ img[data-fb]{background:var(--secondary)}
 .detail .designer-box{margin-top:30px;padding:20px 22px;gap:14px;line-height:1.65}
 .detail .ds-avatar{width:44px;height:44px}
 .detail .related{gap:14px;margin-top:16px}
+/* 详情页顶部：图标居中，名称置于图标下方，去掉多余说明文案 */
+.detail .detail-head{flex-direction:column;align-items:center;text-align:center;gap:14px;padding:16px 0 6px}
+.detail .detail-main{width:132px;height:132px}
+.detail .detail-title{font-size:22px;margin:0}
+.detail .detail-actions{justify-content:center;margin-top:8px}
+@media(max-width:640px){.detail .detail-main{width:112px;height:112px}}
 
 /* ---------- 本地存储容量条 ---------- */
 .quota-bar{height:9px;border-radius:999px;background:var(--secondary);overflow:hidden;margin-top:6px}
@@ -230,6 +246,39 @@ img[data-fb]{background:var(--secondary)}
 .modal{width:min(480px,92vw);background:#fff;border-radius:16px;box-shadow:0 28px 80px rgba(0,0,0,.25);padding:22px;max-height:84vh;overflow:auto}
 .modal h3{margin:0 0 4px;font-size:17px}
 .modal .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+/* 设计师署名弹窗：轻量居中卡片，参考 60fps.design/apps/ahead */
+.overlay.suggest-overlay{background:rgba(255,255,255,.74);backdrop-filter:blur(6px);align-items:center;padding-top:0}
+.modal.suggest-modal{width:min(300px,88vw);padding:20px 18px 18px;border-radius:14px;box-shadow:0 16px 48px rgba(0,0,0,.12);text-align:center}
+.suggest-modal .suggest-emoji{font-size:28px;line-height:1;margin-bottom:10px}
+.suggest-modal .suggest-copy{font-size:13px;line-height:1.5;color:#555;font-weight:600;margin:0 0 14px}
+.suggest-modal .input{background:#f6f6f5;border-color:#eee;border-radius:8px;font-size:13px;padding:9px 11px;margin-bottom:9px;text-align:left}
+.suggest-modal textarea.input{resize:vertical;min-height:40px}
+.suggest-modal .input:focus{background:#fff}
+.suggest-modal .btn{width:100%;background:#f1f1f0;border-color:#e8e8e7;color:#444;font-size:13px;padding:9px;border-radius:8px;margin-top:2px;transition:background .15s,transform .15s,box-shadow .15s}
+.suggest-modal .btn:hover{background:#e3e3e2;color:#222;transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.1)}
+.suggest-modal .btn:active{transform:translateY(0);box-shadow:none}
+/* 未填写校验：标红必填项 + 抖动 + 气泡提示，反馈后自动恢复 */
+.suggest-modal .sd-field{position:relative}
+.suggest-modal .input.error{border-color:#e0393e;background:#fff6f6;box-shadow:0 0 0 3px rgba(224,57,62,.12)}
+.suggest-modal .shake{animation:sd-shake .45s ease}
+@keyframes sd-shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
+.suggest-modal .sd-error{display:none;position:absolute;right:0;top:calc(100% - 3px);z-index:2;align-items:center;gap:6px;background:#fff;border:1px solid #e5e5e5;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.14);padding:7px 10px;font-size:12px;color:#333;white-space:nowrap}
+.suggest-modal .sd-error.on{display:flex}
+.suggest-modal .sd-error i{width:18px;height:18px;flex-shrink:0;background:#f15a22;color:#fff;border-radius:4px;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:12px}
+/* 顶部搜索：结果列表参考 logomodel 的命令面板 */
+.overlay.search-overlay{background:rgba(255,255,255,.74);backdrop-filter:blur(6px);align-items:flex-start;padding:9vh 16px 20px}
+.search-panel{width:min(520px,92vw);background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.18);overflow:hidden}
+.sp-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--border);color:#9a9a97}
+.sp-head .input{flex:1;border:0;padding:0;background:transparent;font-size:14px;box-shadow:none}
+.sp-head .input:focus{box-shadow:none;background:transparent}
+.sp-clear{border:0;background:#f1f1f0;color:#666;width:22px;height:22px;border-radius:50%;line-height:1;font-size:14px;cursor:pointer}
+.sp-clear:hover{background:#e4e4e3;color:#222}
+.sp-results{max-height:58vh;overflow:auto}
+.sp-item{display:block;padding:11px 18px;border-bottom:1px solid #f4f4f3;cursor:pointer}
+.sp-item:hover,.sp-item.on{background:#f6f6f5}
+.sp-item b{display:block;font-size:13.5px;font-weight:600;line-height:1.45;overflow-wrap:anywhere}
+.sp-item small{display:block;color:#9a9a97;font-size:11.5px;margin-top:1px}
+.sp-empty{padding:26px 18px;text-align:center;color:#9a9a97;font-size:13px}
 .seg{display:inline-flex;background:var(--secondary);border-radius:9px;padding:3px;gap:2px}
 .seg button{border:0;background:none;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--muted)}
 .seg button.on{background:#fff;color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -238,17 +287,17 @@ img[data-fb]{background:var(--secondary)}
 .detail-logo{flex-shrink:0}
 .detail-main{cursor:zoom-in}
 .detail-main:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
-.lb-overlay{align-items:center;padding:20px;background:rgba(24,24,26,.64)}
-.lightbox{width:min(560px,92vw);background:#fff;border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.3);padding:18px;position:relative}
-.lb-close{position:absolute;top:10px;right:12px;z-index:2;width:32px;height:32px;border:0;border-radius:50%;background:rgba(0,0,0,.07);color:#555;font-size:21px;line-height:1}
-.lb-close:hover{background:rgba(0,0,0,.14);color:#111}
-.lb-stage{width:100%;max-width:min(60vh,520px);aspect-ratio:1/1;margin:0 auto;background:var(--secondary);border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.lb-stage .lb-img{width:100%;height:100%;object-fit:contain;border-radius:22.37%}
-.lb-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:16px;flex-wrap:wrap}
-.lb-meta{display:flex;flex-direction:column;gap:3px;min-width:0}
-.lb-meta b{font-size:15px;overflow-wrap:anywhere}
-.lb-meta span{font-size:12.5px;color:#7f7f7c}
-@media(max-width:640px){.lightbox{padding:14px}.lb-stage{max-width:min(52vh,420px)}}
+/* 图标大图：全屏纯黑背景，图片居中，底部居中胶囊下载按钮，点图片周围退出 */
+.overlay.lb-overlay{align-items:center;padding:0;background:#000;backdrop-filter:none}
+.lb-overlay .lightbox{width:100%;height:100%;max-width:none;background:transparent;border-radius:0;box-shadow:none;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+.lb-overlay .lb-close{position:absolute;top:20px;right:24px;z-index:2;width:34px;height:34px;border:1px solid rgba(255,255,255,.22);border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:22px;line-height:1}
+.lb-overlay .lb-close:hover{background:rgba(255,255,255,.24)}
+.lb-overlay .lb-stage{width:auto;height:auto;max-width:none;max-height:none;aspect-ratio:auto;background:transparent;border-radius:0;overflow:visible;display:flex;align-items:center;justify-content:center}
+.lb-overlay .lb-stage .lb-img{max-width:min(86vw,1100px);max-height:76vh;width:auto;height:auto;object-fit:contain;border-radius:0}
+.lb-download{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.16);backdrop-filter:blur(8px);color:#fff;font-size:13px;font-weight:600;padding:9px 16px;cursor:pointer;transition:background .15s,transform .15s}
+.lb-download:hover{background:rgba(255,255,255,.26);transform:translateY(-1px)}
+.lb-download:active{transform:translateY(0)}
+@media(max-width:640px){.lb-overlay .lightbox{padding:16px}.lb-overlay .lb-stage .lb-img{max-width:92vw;max-height:66vh}}
 
 
 /* ---------- wall of icons (original spec: 88px tile / 132px cell / 44px gap) ---------- */
@@ -517,9 +566,8 @@ img.imgfx-in{animation:imgfx-reveal .42s ease-out both}
 
 /* 第 47 轮 · 语言切换器（放在「关于」左侧）与 RTL 支持 */
 .lang-wrap{position:relative;display:inline-flex;align-items:center}
-.lang-btn{display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-family:inherit}
-.lang-globe{font-size:13px;opacity:.65;line-height:1}
-.lang-caret{font-size:10px;opacity:.55;line-height:1;margin-left:1px}
+.lang-btn{color:#8a8a8a}
+.lang-btn:hover{color:#000;background:rgba(0,0,0,.08)}
 .lang-menu{position:absolute;right:0;top:calc(100% + 10px);width:198px;max-height:min(430px,72vh);overflow-y:auto;overscroll-behavior:contain;background:var(--bg);border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.14);padding:6px;z-index:90}
 .lang-menu[hidden]{display:none}
 /* 15 项需滚动，但不显示右侧滚动条：Firefox / Edge 旧版 / WebKit 三套写法 */
@@ -766,9 +814,8 @@ const I18N = (function () {
       L[0] + '" role="option" aria-selected="' + (L[0] === current) + '">' + escFn(L[1]) + '</button>'
     ).join('');
     return '<div class="lang-wrap">' +
-      '<button class="nav-link lang-btn" data-act="langtoggle" aria-haspopup="listbox" aria-expanded="false" title="Language">' +
-      '<span class="lang-globe">◈</span><span class="lang-current">' + escFn(name()) + '</span>' +
-      '<span class="lang-caret">⌄</span></button>' +
+      '<button class="nav-link lang-btn" data-act="langtoggle" aria-haspopup="listbox" aria-expanded="false" >' +
+      '<span class="lang-current">' + escFn(name()) + '</span></button>' +
       '<div class="lang-menu" id="lang-menu" role="listbox" hidden>' + opts + '</div></div>';
   }
 
@@ -875,6 +922,8 @@ const ABOUT_DEFAULT={
   contact:'我一直很乐意听说图标出色的应用，欢迎随手推荐给我！'
 };
 const DEFAULT_BRAND_LOGO='data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="144" height="40" viewBox="0 0 144 40"><rect x="0" y="4" width="32" height="32" rx="7" fill="#333332"/><text x="16" y="27" font-family="Helvetica,Arial,sans-serif" font-size="22" font-weight="700" fill="#ffffff" text-anchor="middle">i</text><text x="42" y="27" font-family="sans-serif" font-size="19" font-weight="700" fill="#333332">图标博物馆</text></svg>');
+/* 导航栏只保留图标，不带任何文字 */
+const NAV_BRAND_ICON='data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><text x="20" y="30" font-family="Helvetica,Arial,sans-serif" font-size="30" font-weight="700" fill="#262626" text-anchor="middle">i</text></svg>');
 const DEFAULT_PASS='museum2026', PASS_KEY='iconmuseum_admin_pass';
 function adminPass(){try{return localStorage.getItem(PASS_KEY)||DEFAULT_PASS}catch(e){return DEFAULT_PASS}}
 function setAdminPass(v){try{if(v===DEFAULT_PASS)localStorage.removeItem(PASS_KEY);else localStorage.setItem(PASS_KEY,v)}catch(e){toast('无法保存密码，请检查浏览器存储设置')}}
@@ -1017,6 +1066,11 @@ function ensureTypes(){
 function typeCount(slug){return browseIcons().filter(i=>i.platform===slug).length}
 function noTypeCount(){const set=new Set(ensureTypes().map(t=>t.slug));return browseIcons().filter(i=>!set.has(i.platform)).length}
 function typeName(slug){const t=ensureTypes().find(x=>x.slug===slug);return t?(t.zh||t.name):(slug||'iOS')}
+/* 顶部 APP / Web 导航按平台类型分组：Web网站 归 Web，其余归 APP */
+function isWebPlatform(slug){
+  const t=ensureTypes().find(x=>x.slug===slug);
+  return /web|网站/i.test(((t?.name||'')+' '+(t?.zh||'')+' '+String(slug||'')).toLowerCase());
+}
 function defaultTypeSlug(){
   const l=ensureTypes().filter(t=>t.visible!==false).slice().sort((a,b)=>(a.order||0)-(b.order||0));
   return l[0]?.slug||'ios';
@@ -1853,8 +1907,12 @@ function download(name,content,mime='text/plain'){
   a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
   toast('已下载 '+name);
 }
-function openModal(html){$('#layer').innerHTML=`<div class="overlay" id="overlay">${html}</div>`;
-  $('#overlay').addEventListener('mousedown',e=>{if(e.target.id==='overlay')closeModal()})}
+function openModal(html,cls=''){$('#layer').innerHTML=`<div class="overlay${cls?' '+cls:''}" id="overlay">${html}</div>`;
+  /* 点击遮罩（弹窗外任何位置）关闭，Esc 关闭由全局键盘事件处理 */
+  $('#overlay').addEventListener('mousedown',e=>{
+    /* 普通弹窗点遮罩关闭；大图模式点图片周围的黑底/舞台也关闭，点图片本身不关闭 */
+    if(e.target.id==='overlay'||e.target.classList.contains('lightbox')||e.target.classList.contains('lb-stage'))closeModal()
+  })}
 function closeModal(){$('#layer').innerHTML=''}
 function appBySlug(s){return DB.apps.find(a=>a.app.slug===s)}
 function currentDetailIcon(){
@@ -2031,8 +2089,10 @@ const COLOR_ALIAS={silver:'gray',charcoal:'black',slate:'gray',cream:'white',bei
   maroon:'red',rose:'red',scarlet:'red',burgundy:'red',turquoise:'teal',fuchsia:'pink',blush:'pink',
   apricot:'orange',tangerine:'orange',lemon:'yellow',sea:'teal',gold:'yellow',pale:'light'};
 function applyFilters(list,p){
-  /* browseIcons 已保证每应用一枚默认图标，不再二次按 platform/type 过滤，避免结果与统计不一致 */
+  /* browseIcons 已保证每应用一枚默认图标；顶部 APP / Web 按平台类型分组 */
   let out=list;
+  if(p.get('platform')==='app')out=out.filter(i=>!isWebPlatform(i.platform));
+  if(p.get('platform')==='web')out=out.filter(i=>isWebPlatform(i.platform));
   if(p.get('tab')==='indie')out=out.filter(i=>i.indie);
   if(p.get('category'))out=out.filter(i=>i.categorySlugs.includes(p.get('category')));
   if(p.get('designer'))out=out.filter(i=>i.designerSlug===p.get('designer'));
@@ -2138,11 +2198,21 @@ function goBack(){
 function qsSet(obj){const p=new URLSearchParams();Object.entries(obj).forEach(([k,v])=>{if(v)p.set(k,v)});return '/?'+p.toString()}
 
 /* ---------- nav ---------- */
+/* 线性搜索图标：与 logosystem.co 的细描边风格一致，不使用 emoji */
+function searchIconSVG(){
+  return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>';
+}
+
 function renderNav(){
+  const p=route().p,pf=p.get('platform');
   $('#nav').innerHTML=`<header class="nav"><div class="nav-inner">
     <div class="nav-left">
-    <a class="brand" href="#/" title="APP LOGO 图标收藏馆"><img class="brand-logo" src="${esc(brandLogo())}" alt="APP LOGO 图标收藏馆"></a>
-    ${updateBadgeHTML()}
+      <a class="brand" href="#/" aria-label="首页"><img class="brand-logo" src="${NAV_BRAND_ICON}" alt=""></a>
+      <a class="nav-link ${pf==='app'||(!pf&&route().path==='/')?'active':''}" href="#/?platform=app">APP</a>
+      <a class="nav-link ${pf==='web'?'active':''}" href="#/?platform=web">Web</a>
+    </div>
+    <div class="nav-search">
+      <button class="nav-search-btn" data-act="appsearch" aria-label="搜索 APP 名称">${searchIconSVG()}<span>搜索 APP 名称…</span></button>
     </div>
     <div class="nav-right">
       ${I18N.buttonHTML()}
@@ -2262,14 +2332,11 @@ function viewApp(slug){
     <button type="button" class="back" data-act="goback" style="background:none;border:0;padding:0;cursor:pointer;line-height:inherit;font-family:inherit">← ${esc(t('back'))}</button>
     <div class="detail-head">
       <div class="detail-logo">
-        <div class="detail-main" id="detail-main" role="button" tabindex="0" title="点击放大查看图标" aria-label="放大查看 ${esc(a.app.name)} 图标">${imgTag(ic?.url,'',a.app.name)}</div>
-        <div class="tiny muted" style="text-align:center;margin-top:10px">点击放大查看</div>
+        <div class="detail-main" id="detail-main" role="button" tabindex="0" aria-label="放大查看 ${esc(a.app.name)} 图标">${imgTag(ic?.url,'',a.app.name)}</div>
       </div>
-      <div class="grow" style="min-width:210px">
-        <div class="tiny muted" style="text-transform:uppercase;letter-spacing:.08em">应用图标 · ${esc(typeName(ic?.platform))}</div>
+      <div class="detail-info">
         <h1 class="detail-title">${esc(a.app.name)}</h1>
-        <div class="small muted">${esc(a.app.developer?.name||'独立开发者')}${a.app.indie?' · <span class="tag" style="margin-left:6px">独立开发者</span>':''}</div>
-        <div class="row wrap" style="margin-top:14px">
+        <div class="row wrap detail-actions">
           ${storeUrl?`<a class="btn sm primary" href="${esc(storeUrl)}" target="_blank" rel="noopener">↗ ${esc(t('appStore'))}</a>`:''}
           ${appSite?`<a class="btn sm" href="${esc(appSite)}" target="_blank" rel="noopener">↗ ${esc(t('website'))}</a>`:''}
           <button class="btn sm" data-act="downloadicon" data-u="${esc(ic?.url)}" data-n="${esc(a.app.name)}" title="下载 1024 × 1024 高清图，文件名为应用名称">↓ ${esc(t('download'))}</button>
@@ -2287,8 +2354,7 @@ function viewApp(slug){
       <div class="meta-item"><div class="k">风格</div><div class="v">${esc(iconStyles(ic).length?iconStyles(ic).map(styleName).filter(Boolean).join('、')||'—':'—')}</div></div>
       <div class="meta-item"><div class="k">${esc(t('platform'))}</div><div class="v">${esc(typeName(ic?.platform))}</div></div>
       <div class="meta-item"><div class="k">${esc(t('type'))}</div><div class="v">${esc(ic?.variantName||'默认')}${ic?.isHistorical?' · 历史版本':''}</div></div>
-      <div class="meta-item"><div class="k">${esc(t('date'))}</div><div class="v">${fmtDate(ic?.date||a.updatedAt)}</div></div>
-      <div class="meta-item"><div class="k">更新时间</div><div class="v">${esc(fmtUpd(ic?.updatedAt||a.updatedAt))}</div></div>
+      <!-- 日期与更新时间仅保留在数据层，详情页不再展示 -->
     </div>
     <h2>${bi('palette')}</h2>
     <div class="icon-palette" title="点击色块复制色值">${pal.map(c=>`<button class="swatch" data-act="copyhex" data-c="${esc(c)}" title="点击复制 ${esc(c)}"><i style="background:${esc(c)}"></i><span>${esc(String(c).toUpperCase())}</span></button>`).join('')||'<div class="small muted">—</div>'}</div>
@@ -2314,12 +2380,8 @@ function openIconLightbox(url,name,hd){
   openModal(`<div class="lightbox" role="dialog" aria-modal="true" aria-label="${esc(name)} 图标预览">
     <button class="lb-close" data-act="closemodal" aria-label="关闭">×</button>
     <div class="lb-stage">${imgTag(hd||url,'lb-img',name,true)}</div>
-    <div class="lb-bar">
-      <div class="lb-meta"><b>${esc(name)}</b><span>${hd?'高清原图预览 · ':''}点击空白处或按 Esc 关闭 · 可下载 1024 × 1024 高清图</span></div>
-      <button class="btn sm primary" data-act="downloadicon" data-u="${esc(url)}" data-n="${esc(name)}">↓ 下载高清大图</button>
-    </div>
-  </div>`);
-  $('#overlay').classList.add('lb-overlay');
+    <button class="lb-download" data-act="downloadicon" data-u="${esc(url)}" data-n="${esc(name)}">↓ 下载高清大图</button>
+  </div>`,'lb-overlay');
 }
 /* 文件名保留中文应用名，仅剔除各操作系统不允许的字符 */
 function safeFileName(name){
@@ -2367,27 +2429,74 @@ async function downloadIcon(url,name,hd){
 }
 function suggestDesignerModal(slug){
   const a=appBySlug(slug);if(!a)return;
-  openModal(`<div class="modal"><h3>${bi('knowDesigner')}</h3><p class="small muted">${esc(a.app.name)} · ${bi('getInTouch')}</p>
-    <div class="seg" id="role-seg" style="margin:14px 0">
-      <button class="on" data-r="designer">${esc(t('imDesigner'))}</button>
-      <button data-r="contributor">${esc(t('iKnow'))}</button>
-      <button data-r="contact">${esc(t('contactUs'))}</button>
+  openModal(`<div class="modal suggest-modal" role="dialog" aria-modal="true" aria-label="补充设计师署名">
+    <div class="suggest-emoji" aria-hidden="true">🙋</div>
+    <p class="suggest-copy">认识这位设计师？联系我们补充署名。</p>
+    <div class="sd-field" id="sd-field">
+      <input class="input" id="sd-link" placeholder="社交平台链接或设计师个人网站" autocomplete="off">
+      <div class="sd-error" id="sd-error" role="alert"><i>!</i>请填写此字段。</div>
     </div>
-    <label class="field"><span>${esc(t('name'))}</span><input class="input" id="sd-name" placeholder="${esc(t('name'))}"></label>
-    <label class="field"><span>社交平台ID</span><input class="input" id="sd-twitter" placeholder="例如：小红书1105611935"></label>
-    <label class="field"><span>${esc(t('website'))}</span><input class="input" id="sd-website" placeholder="https://"></label>
-    <label class="field"><span>备注 <span class="hint">选填</span></span><textarea class="input" id="sd-note" rows="2"></textarea></label>
-    <div class="foot"><button class="btn" data-act="closemodal">${esc(t('cancel'))}</button><button class="btn primary" data-act="submitsuggest" data-slug="${esc(slug)}">${esc(t('submit'))}</button></div>
-  </div>`);
-  let role='designer';
-  $$('#role-seg button').forEach(b=>b.addEventListener('click',()=>{role=b.dataset.r;$$('#role-seg button').forEach(x=>x.classList.toggle('on',x===b))}));
+    <textarea class="input" id="sd-note" rows="2" placeholder="备注（选填）"></textarea>
+    <button class="btn" data-act="submitsuggest" data-slug="${esc(slug)}">提交</button>
+  </div>`,'suggest-overlay');
+  const linkInput=$('#sd-link'),sdField=$('#sd-field'),sdError=$('#sd-error');
+  const clearSdError=()=>{linkInput.classList.remove('error');sdField.classList.remove('shake');sdError.classList.remove('on')};
+  linkInput.addEventListener('input',clearSdError);
   $('[data-act="submitsuggest"]').addEventListener('click',()=>{
-    const name=$('#sd-name').value.trim();if(!name){toast('请填写姓名');return}
-    DB.suggestions.unshift({id:uid(),appSlug:slug,appName:a.app.name,iconUrl:a.defaultIconUrl,name,role,
-      twitter:$('#sd-twitter').value.trim(),website:$('#sd-website').value.trim(),note:$('#sd-note').value.trim(),
+    clearSdError();
+    const link=linkInput.value.trim(),note=$('#sd-note').value.trim();
+    if(!link){
+      /* 先重置再触发，保证连续点击也有抖动反馈；1.6s 后恢复默认状态 */
+      void sdField.offsetWidth;
+      linkInput.classList.add('error');sdField.classList.add('shake');sdError.classList.add('on');
+      linkInput.focus();setTimeout(clearSdError,1600);
+      return;
+    }
+    const isUrl=/^https?:\/\//i.test(link);
+    /* 后台仍按旧字段结构存储，保证「设计师推荐」列表与审核流程不变 */
+    DB.suggestions.unshift({id:uid(),appSlug:slug,appName:a.app.name,iconUrl:a.defaultIconUrl,
+      name:link||note||'未提供',role:'contact',twitter:isUrl?'':link,website:isUrl?link:'',note,
       status:'pending',createdAt:nowISO(),dismissedAt:null});
     log('收到 '+a.app.name+' 的设计师推荐');save();closeModal();toast(t('saved')+' · '+t('getInTouch'));
   });
+}
+
+/* 顶部搜索：模糊匹配 APP 名称 / slug，点结果直达详情页 */
+function fuzzyScore(text,q){
+  const n=String(text||'').toLowerCase().replace(/\s+/g,'');
+  const s=String(q||'').toLowerCase().replace(/\s+/g,'');
+  if(!s)return 0;
+  const idx=n.indexOf(s);
+  if(idx>=0)return 1000-idx;
+  let i=0,gap=0;
+  for(let k=0;k<n.length&&i<s.length;k++){if(n[k]===s[i]){i++;gap+=k}}
+  return i===s.length?Math.max(1,200-gap):0;
+}
+function appSearchModal(){
+  openModal(`<div class="search-panel" role="dialog" aria-modal="true" aria-label="搜索 APP 名称">
+    <div class="sp-head">${searchIconSVG()}
+      <input class="input" id="sp-q" placeholder="搜索 APP 名称…" autocomplete="off">
+      <button class="sp-clear" data-act="closemodal" aria-label="关闭搜索">×</button>
+    </div>
+    <div class="sp-results" id="sp-results"></div>
+  </div>`,'search-overlay');
+  const q=$('#sp-q'),box=$('#sp-results');
+  const apps=DB.apps.slice();
+  const render=()=>{
+    const v=q.value.trim();
+    if(!v){box.innerHTML='';return} /* 默认只有输入框，不预展示结果 */
+    const list=apps.map(a=>({a,s:fuzzyScore(a.app.name+' '+a.app.slug,v)}))
+      .filter(x=>x.s>0).sort((x,y)=>y.s-x.s).slice(0,12).map(x=>x.a);
+    box.innerHTML=list.length?list.map(a=>`<a class="sp-item" data-slug="${esc(a.app.slug)}" href="#/apps/${esc(a.app.slug)}"><b>${esc(a.app.name)}</b><small>/apps/${esc(a.app.slug)}</small></a>`).join(''):'<div class="sp-empty">没有找到匹配的应用</div>';
+    box.querySelectorAll('.sp-item').forEach(el=>el.addEventListener('click',e=>{
+      e.preventDefault();closeModal();go('/apps/'+el.dataset.slug);
+    }));
+  };
+  q.addEventListener('input',render);
+  q.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){const first=box.querySelector('.sp-item');if(first){e.preventDefault();first.click()}}
+  });
+  render();q.focus();
 }
 
 /* ---------- about / press / wall / 404 ---------- */
@@ -3828,6 +3937,7 @@ document.addEventListener('click',e=>{
     case 'copyhex':copy(el.dataset.c);break;
     case 'downloadicon':{const ic=currentDetailIcon();downloadIcon(el.dataset.u,el.dataset.n||'图标',ic?.hdUrl);break}
     case 'suggestdesigner':suggestDesignerModal(el.dataset.slug);break;
+    case 'appsearch':appSearchModal();break;
     case 'closemodal':closeModal();break;
     case 'downloadlogo':download('icon-museum-logo.svg',logoSVG(),'image/svg+xml');break;
     case 'downloadkit':download('icon-museum-press-kit.txt',pressKit(),'text/plain');break;
