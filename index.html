@@ -1985,7 +1985,7 @@ function appBySlug(s){return DB.apps.find(a=>a.app.slug===s)}
 function currentDetailIcon(){
   const {path,p}=route();if(!path.startsWith('/apps/'))return null;
   const raw=decodeURIComponent(path.slice(6)).replace(/\/\d+$/,'');
-  const a=appBySlug(raw)||DB.apps.find(x=>x.app.name.toLowerCase()===raw.toLowerCase());if(!a)return null;
+  const a=appBySlug(raw)||DB.apps.find(x=>urlName(x.app.name).toLowerCase()===urlName(raw).toLowerCase());if(!a)return null;
   const all=a.icons.filter(i=>!i.archivedAt);
   const n=Number(p.get('icon'));
   return (n>0?all[n-1]:null)||all.find(i=>i.id===p.get('icon'))||defaultIcon(a)||all[0]||null;
@@ -2297,9 +2297,14 @@ function homeURL(p){
   if(p.get('fxdev')){path+='/fxdev';q.delete('fxdev')}
   const s=q.toString();return path+(s?'?'+s:'');
 }
+function urlName(name){
+  return String(name||'')
+    .replace(/[\s|｜:：&＆,，、/／+＋()（）\[\]【】!！'’"“”•·]/g,'-')
+    .replace(/-{2,}/g,'-').replace(/^-+|-+$/g,'');
+}
 function appPath(slugOrName,icon){
   const a=appBySlug(slugOrName)||DB.apps.find(x=>x.app.name===slugOrName);
-  const name=a?.app?.name||String(slugOrName||'');
+  const name=urlName(a?.app?.name||slugOrName||'');
   const all=(a?.icons||[]).filter(i=>!i.archivedAt);
   let idx=0;
   if(icon)idx=all.findIndex(i=>i.id===icon)+1;
@@ -4040,7 +4045,7 @@ function render(opts){
   if(path==='/')viewHome();
   else if(path.startsWith('/apps/')){
     const name=decodeURIComponent(path.slice(6)).replace(/\/\d+$/,'');
-    const a=DB.apps.find(x=>x.app.name.toLowerCase()===name.toLowerCase());
+    const a=DB.apps.find(x=>urlName(x.app.name).toLowerCase()===urlName(name).toLowerCase())||appBySlug(name);
     viewApp(a?a.app.slug:name);
   }
   else if(path==='/about')viewAbout();
