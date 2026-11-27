@@ -2374,8 +2374,10 @@ function renderNav(){
 /* ---------- home ---------- */
 function heroHTML(){
   const web=route().p.get('platform')==='web';
-  const list=browseIcons().filter(i=>web?isWebPlatform(i.platform):!isWebPlatform(i.platform));
-  const appCount=new Set(list.map(i=>i.app.slug)).size,iconCount=list.length;
+  /* 统计按真实图标记录数，变体也要计入；browseIcons 每应用只取一枚，不能用于统计 */
+  const all=DB.apps.flatMap(a=>(a.icons||[]).filter(i=>!i.archivedAt).map(i=>({a,i})));
+  const list=all.filter(x=>web?isWebPlatform(x.i.platform):!isWebPlatform(x.i.platform));
+  const appCount=new Set(list.map(x=>x.a.app.slug)).size,iconCount=list.length;
   return `<section class="hero">
     <h1>${web?'web logo':'app logo'}</h1>
     <p class="hero-sub"><span class="line1">收录 <b>${appCount}</b> 个应用 · <b>${iconCount}</b> 枚图标</span><button type="button" class="line2 explore-btn ${EXPLORE.on?'on':''}" data-act="explore" aria-pressed="${EXPLORE.on}">自由探索</button></p>
