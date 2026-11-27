@@ -2237,6 +2237,15 @@ function urlLang(){
   const c=(typeof I18N!=='undefined'&&I18N.lang)?I18N.lang():'zh-CN';
   return c==='zh-CN'?'zh':c;
 }
+function swapLangInPath(raw,code){
+  if(FILE_MODE)return raw;
+  const [path,qs]=raw.split('?'),seg=path.split('/').filter(Boolean);
+  if(!seg.length)return raw;
+  const first=seg[0],existing=first==='zh'?'zh-CN':first;
+  if(!I18N.list().some(L=>L[0]===existing))return raw;
+  seg[0]=code==='zh-CN'?'zh':code;
+  return '/'+seg.join('/')+(qs?'?'+qs:'');
+}
 function route(){
   const raw=routeRaw();const [rawPath,qs]=raw.split('?');
   let seg=(rawPath||'/').split('/').filter(Boolean);
@@ -2248,7 +2257,7 @@ function route(){
   if(first&&first!=='apps'&&first!=='about'&&first!=='wall'&&first!=='press'&&first!=='admin'&&first!=='app'&&first!=='web'){
     const code=first==='zh'?'zh-CN':first;
     if(typeof I18N!=='undefined'&&I18N.list().some(L=>L[0]===code)){
-      if(I18N.lang()!==code)I18N.set(code);
+      p.set('lang',code); /* 只记录，真正的切换在 render() 入口做，避免 renderNav 递归改回 */
       seg.shift();
     }
   }
@@ -2280,7 +2289,7 @@ function platformURL(pf){
 }
 function homeURL(p){
   const q=new URLSearchParams(p);
-  q.delete('platform');q.delete('sort');q.delete('tab');
+  q.delete('platform');q.delete('sort');q.delete('tab');q.delete('lang');
   let path=homePath(p);
   const key=({category:'category',color:'color',style:'style',designer:'designer'})[p.get('tab')];
   if(key&&p.get(key)){path+='/'+encodeURIComponent(p.get(key));q.delete(key)}
@@ -4024,9 +4033,10 @@ function render(opts){
   const mode=opts.scroll||'top';
   const keepY=window.scrollY||0;
   const restoreY=savedScrollY();
+  const {path,p}=route();
+  if(p.get('lang')&&I18N.lang()!==p.get('lang'))I18N.set(p.get('lang'));
   document.body.className='lang-zh';
   closeModal();renderNav();
-  const {path,p}=route();
   if(path==='/')viewHome();
   else if(path.startsWith('/apps/')){
     const name=decodeURIComponent(path.slice(6)).replace(/\/\d+$/,'');
@@ -4060,7 +4070,12 @@ document.addEventListener('click',e=>{
   switch(a){
     case 'goback':goBack();break;
     case 'langtoggle':{const m=$('#lang-menu');if(m){m.hidden=!m.hidden;el.setAttribute('aria-expanded',m.hidden?'false':'true')}break}
-    case 'langset':{I18N.set(el.dataset.v);const m=$('#lang-menu');if(m)m.hidden=true;break}
+    case 'langset':{
+      const code=el.dataset.v,raw=routeRaw(),to=swapLangInPath(raw,code);
+      I18N.set(code);
+      if(to!==raw){try{history.replaceState(Object.assign({},history.state,{y:window.scrollY||0}),'',to)}catch(e){}}
+      const m=$('#lang-menu');if(m)m.hidden=true;break
+    }
     case 'updates':{
       if(EXPLORE.on)EXPLORE.set(false);
       const p=route().p;p.set('sort','updated');
