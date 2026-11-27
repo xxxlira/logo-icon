@@ -2231,7 +2231,25 @@ function orderedIcons(p){
   if(p.get('sort')==='updated')return list.slice().sort((x,y)=>upTime(y.uploadedAt)-upTime(x.uploadedAt));
   return list;
 }
-function route(){const raw=routeRaw();const [path,qs]=raw.split('?');return {path:path||'/',p:new URLSearchParams(qs||'')}}
+function route(){
+  const raw=routeRaw();const [rawPath,qs]=raw.split('?');let path=rawPath||'/';
+  const p=new URLSearchParams(qs||'');
+  /* /app 与 /web 是首页的一级筛选入口；/xxx/updated 是当日更新页 */
+  if(path==='/app'||path==='/app/updated'){
+    p.set('platform','app');if(path.endsWith('/updated'))p.set('sort','updated');path='/';
+  }else if(path==='/web'||path==='/web/updated'){
+    p.set('platform','web');if(path.endsWith('/updated'))p.set('sort','updated');path='/';
+  }
+  return {path,p};
+}
+function homePath(p){
+  const base=p.get('platform')==='web'?'/web':'/app';
+  return p.get('sort')==='updated'?base+'/updated':base;
+}
+function homeURL(p){
+  const q=new URLSearchParams(p);q.delete('sort');q.delete('platform');
+  const s=q.toString();return homePath(p)+(s?'?'+s:'');
+}
 function go(to){
   to=to||'/';
   if(FILE_MODE){if(location.hash==='#'+to)render();else location.hash='#'+to;return}
@@ -2263,7 +2281,7 @@ function goBack(){
   try{history.replaceState({d:0,y:0},'', '/')}catch(e){location.href='/';return}
   render({scroll:'top'});
 }
-function qsSet(obj){const p=new URLSearchParams();Object.entries(obj).forEach(([k,v])=>{if(v)p.set(k,v)});return '/?'+p.toString()}
+function qsSet(obj){const p=new URLSearchParams();Object.entries(obj).forEach(([k,v])=>{if(v)p.set(k,v)});return homeURL(p)}
 
 /* ---------- nav ---------- */
 /* 线性搜索图标：与 logosystem.co 的细描边风格一致，不使用 emoji */
@@ -2276,8 +2294,8 @@ function renderNav(){
   $('#nav').innerHTML=`<header class="nav"><div class="nav-inner">
     <div class="nav-left">
       <a class="brand" href="#/" aria-label="首页"><img class="brand-logo" src="${esc(brandLogo())}" alt=""></a>
-      <a class="nav-link ${pf==='app'||(!pf&&route().path==='/')?'active':''}" href="#/?platform=app">APP</a>
-      <a class="nav-link ${pf==='web'?'active':''}" href="#/?platform=web">Web</a>
+      <a class="nav-link ${pf==='app'||(!pf&&route().path==='/')?'active':''}" href="#/app">APP</a>
+      <a class="nav-link ${pf==='web'?'active':''}" href="#/web">Web</a>
       ${updateBadgeHTML()}
     </div>
     <div class="nav-search">
@@ -3994,7 +4012,7 @@ document.addEventListener('click',e=>{
     case 'updates':{
       if(EXPLORE.on)EXPLORE.set(false);
       const p=route().p;p.set('sort','updated');
-      go('/?'+p.toString());
+      go(homeURL(p));
       break}
     case 'explore':{
       EXPLORE.reshuffle(); /* 第 53 轮：每次点击都换一批，不再二次点击退回时间序 */
@@ -4085,9 +4103,9 @@ document.addEventListener('click',e=>{
     case 'importjson':{const inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';inp.onchange=()=>{const f=inp.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{const d=JSON.parse(fr.result);if(!d.apps)throw 0;DB=d;if(!DB.settings)DB.settings={};if(!DB.about)DB.about=clone(ABOUT_DEFAULT);if(!DB.settings.brandLogo)DB.settings.brandLogo=DEFAULT_BRAND_LOGO;if(!DB.security)DB.security=clone(SECURITY_DEFAULT);ensureCategories();ensureStyles();ensureTypes();normalizeDBCategories();save();toast('数据已导入');render()}catch(err){toast('JSON 格式无效')}};fr.readAsText(f)};inp.click();break}
     case 'resetdata':{if(window.confirm('确定将所有本地修改恢复为原始快照吗？')){DB=freshDB();ensureCategories();ensureStyles();ensureTypes();normalizeDBCategories();save();toast('已恢复');render()}break}
     case 'ftab':go(v==='all'?'/':'/?tab='+encodeURIComponent(v));break;
-    case 'fclear':go('/?tab='+homeTab(route().p));break;
-    case 'fpick':go('/?tab='+encodeURIComponent(el.dataset.t)+'&'+encodeURIComponent(el.dataset.k)+'='+encodeURIComponent(v));break;
-    case 'fmore':{const p=route().p;p.set('more','1');go('/?'+p.toString());break}
+    case 'fclear':{const p=route().p;p.set('tab',homeTab(p));p.delete('more');go(homeURL(p));break}
+    case 'fpick':{const p=route().p;p.set('tab',el.dataset.t);p.set(el.dataset.k,v);p.delete('more');go(homeURL(p));break}
+    case 'fmore':{const p=route().p;p.set('more','1');go(homeURL(p));break}
     case 'savecatsettings':{
       const lim=Math.max(0,Math.min(50,parseInt($('#cat-limit').value,10)||0));
       DB.settings.homeCategoryCount=lim;
