@@ -2862,6 +2862,7 @@ function viewAdminDashboard(){
         <label class="field"><span>日期</span><input class="input" type="date" id="qu-date" value="${new Date().toISOString().slice(0,10)}"></label></div>
         <div class="form-row form-stack"><label class="field"><span>类型</span><select class="input" id="qu-platform">${typeOptions(defaultTypeSlug())}</select></label>
         <label class="field"><span>设计师 <span class="hint">留空表示无</span></span><input class="input" id="qu-designer" list="qu-designer-list" placeholder="输入设计师姓名" autocomplete="off"><datalist id="qu-designer-list">${DB.designers.map(d=>`<option value="${esc(d.name)}"></option>`).join('')}</datalist></label></div>
+        <label class="field"><span>开发者网站 <span class="hint">选填</span></span><input class="input" id="qu-web" placeholder="例如 example.com（可省略 https://）"></label>
         <label class="field"><span>图标风格 <span class="hint">可多选</span></span></label>${styleCheckboxes([],'qu-styles')}
         <button class="btn primary sm" data-act="quickupload">添加变体 / 上传图标</button>
       </div>
@@ -3136,6 +3137,12 @@ async function quickUpload(){
     DB.apps.unshift(a);log('上传时自动新建应用：'+raw);
   }
   if(!a.app.developer){toast('该应用还没有开发者，请先在「应用信息」中填写');return}
+  const web=cleanUrl($('#qu-web')?.value||'');
+  if(web){
+    a.app.website=web;
+    if(a.app.developer)a.app.developer.website=web;
+    log('更新开发者网站：'+web);
+  }
   const variant=$('#qu-variant').value.trim(),date=$('#qu-date').value,platform=$('#qu-platform').value;
   const draw=$('#qu-designer').value.trim();
   let designer=null;
@@ -3386,7 +3393,7 @@ function newAppModal(){
     <label class="field"><span> slug（路径标识）</span><input class="input" id="na-slug" placeholder="留空自动生成"></label>
     <label class="field"><span>开发者</span><input class="input" id="na-dev" placeholder="开发者名称"></label>
     <label class="field"><span>App Store 链接</span><input class="input" id="na-store" placeholder="https://apps.apple.com/..."></label>
-    <label class="field"><span>个人网站</span><input class="input" id="na-web" placeholder="例如 behance.net/name（可省略 https://）"></label>
+    <label class="field"><span>开发者网站</span><input class="input" id="na-web" placeholder="例如 example.com（可省略 https://）"></label>
     <label class="field"><span>图标文件</span><input class="input" type="file" id="na-file" accept="image/*"></label>
     <label class="field"><span>收录日期</span><input class="input" type="date" id="na-date" value="${new Date().toISOString().slice(0,10)}"></label>
     <label class="field"><span>图标风格 <span class="hint">可多选</span></span></label>${styleCheckboxes([],'na-styles')}
@@ -3422,7 +3429,7 @@ function viewAdminAppEdit(slug){
         <label class="field"><span> slug（路径标识）</span><input class="input" id="ed-slug" value="${esc(a.app.slug)}" disabled></label>
         <label class="field"><span>开发者</span><input class="input" id="ed-dev" value="${esc(a.app.developer?.name||'')}" placeholder="添加图标前必须先填写开发者"></label>
         <label class="field"><span>App Store 链接</span><input class="input" id="ed-store" value="${esc(a.app.storeUrl||'')}"></label>
-        <label class="field"><span>个人网站</span><input class="input" id="ed-web" placeholder="例如 behance.net/name（可省略 https://）" value="${esc(a.app.website||'')}"></label>
+        <label class="field"><span>开发者网站</span><input class="input" id="ed-web" placeholder="例如 example.com（可省略 https://）" value="${esc(a.app.website||'')}"></label>
         <label class="field"><span>收录日期 <span class="hint">同时更新主图标日期，前台详情页会同步显示</span></span><input class="input" type="date" id="ed-date" value="${esc(String(a.updatedAt||defaultIcon(a)?.date||'').slice(0,10))}"></label>
         <label class="field"><span>类型 <span class="hint">保存后应用到该应用的全部图标；选项在「类型设置」中维护</span></span><select class="input" id="ed-type">${typeOptions(defaultIcon(a)?.platform||defaultTypeSlug())}</select></label>
         <label class="field"><span>图标风格 <span class="hint">可多选，保存后应用到该应用的全部图标</span></span></label>${styleCheckboxes(iconStyles(defaultIcon(a)),'ed-styles')}
